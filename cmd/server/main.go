@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,7 +11,6 @@ import (
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc(`/update/`, updatePage)
-	mux.HandleFunc(`/`, mainPage)
 
 	err := http.ListenAndServe(`:8080`, mux)
 	if err != nil {
@@ -88,29 +86,4 @@ func parsePath(pathSplit []string, storage *MemStorage) int {
 		return http.StatusBadRequest
 	}
 	return http.StatusOK
-}
-
-func mainPage(res http.ResponseWriter, req *http.Request) {
-	res.WriteHeader(http.StatusNotFound)
-	return
-	header := fmt.Sprintf("Method: %s\r\n", req.Method)
-	header += "Header ===============\r\n"
-	for k, v := range req.Header {
-		header += fmt.Sprintf("%s: %v\r\n", k, v)
-	}
-	header += "Query parameters ===============\r\n"
-	if err := req.ParseForm(); err != nil {
-		res.Write([]byte(err.Error()))
-		return
-	}
-	for k, v := range req.Form {
-		header += fmt.Sprintf("%s: %v\r\n", k, v)
-	}
-	header += "OTHERS ===============\r\n"
-	header += req.Host + "\n"
-	header += req.Proto + "\n"
-	header += req.RemoteAddr + "\n"
-	header += req.RequestURI + "\n"
-	header += req.URL.Path + "\n"
-	res.Write([]byte(header))
 }

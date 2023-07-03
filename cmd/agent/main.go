@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	resp, err := http.Post("http://localhost:8080/update/counter/NumCPU/"+fmt.Sprint(runtime.NumCPU()), "text/plain", http.NoBody)
+	resp, err := http.Post("http://localhost:8080/updater/counter/NumCPU/"+fmt.Sprint(runtime.NumCPU()), "text/plain", http.NoBody)
 	if err != nil {
 		panic(err)
 	} else {
