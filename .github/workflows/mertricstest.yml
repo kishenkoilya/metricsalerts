@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - iter1
 
 jobs:
 
