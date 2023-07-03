@@ -68,7 +68,7 @@ func parsePath(pathSplit []string, storage *MemStorage) int {
 		}
 		res, err := strconv.ParseInt(pathSplit[4], 0, 64)
 		if err != nil {
-			return http.StatusNotFound
+			return http.StatusBadRequest
 		}
 		storage.counters[pathSplit[3]] += res
 	} else if pathSplit[2] == "gauge" {
@@ -81,14 +81,18 @@ func parsePath(pathSplit []string, storage *MemStorage) int {
 		}
 		res, err := strconv.ParseFloat(pathSplit[4], 64)
 		if err != nil {
-			return http.StatusNotFound
+			return http.StatusBadRequest
 		}
 		storage.gauges[pathSplit[3]] = res
+	} else {
+		return http.StatusBadRequest
 	}
 	return http.StatusOK
 }
 
 func mainPage(res http.ResponseWriter, req *http.Request) {
+	res.WriteHeader(http.StatusNotFound)
+	return
 	header := fmt.Sprintf("Method: %s\r\n", req.Method)
 	header += "Header ===============\r\n"
 	for k, v := range req.Header {

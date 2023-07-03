@@ -20,4 +20,5 @@ func main() {
 			fmt.Print("\n")
 		}
 	}
+	resp.Body.Close()
 }
