@@ -19,7 +19,7 @@ func updateMetrics(m *runtime.MemStats, gaugeMetrics []string, storage *MemStora
 	for _, metricName := range gaugeMetrics {
 		value := reflect.ValueOf(*m).FieldByName(metricName)
 		if value.IsValid() {
-			fmt.Println("Metric " + metricName + " equals " + value.String())
+			// fmt.Println("Metric " + metricName + " equals " + value.String())
 			if value.CanFloat() {
 				storage.gauges[metricName] = value.Float()
 			} else if value.CanUint() {
@@ -30,7 +30,6 @@ func updateMetrics(m *runtime.MemStats, gaugeMetrics []string, storage *MemStora
 		}
 	}
 	storage.counters["PollCount"]++
-	rand.Seed(time.Now().UnixNano())
 	storage.gauges["RandomValue"] = rand.Float64()
 }
 
@@ -61,7 +60,7 @@ func main() {
 	storage := MemStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
 	var m runtime.MemStats
 
-	var i int = 0
+	i := 0
 	for {
 		updateMetrics(&m, gaugeMetrics, &storage)
 		i++
