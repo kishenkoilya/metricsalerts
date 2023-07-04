@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	// "time"
-	// "runtime"
 )
 
 func main() {
@@ -32,25 +30,8 @@ func updatePage(res http.ResponseWriter, req *http.Request) {
 	pathSplit := strings.Split(req.URL.Path, "/")
 	statusRes := parsePath(pathSplit, &storage)
 
-	// header := fmt.Sprintf("")
-	// if statusRes != http.StatusOK {
-	// 	fmt.Println("NOT OK")
-	// } else {
-	// 	dateFormatted := time.Now().Format("Mon, 02 Jan 2006 15:04:05 MST")
-	// 	header += req.Proto + " " + fmt.Sprint(statusRes) + " OK\n"
-	// 	header += "Date: " + fmt.Sprint(dateFormatted) + "\n"
-	// 	header += "Content-Length: " + fmt.Sprint(0) + "\n"
-	// 	header += "Content-Type: text/plain; charset=utf-8"
-	// }
-
-	// header := fmt.Sprintf("path: \n")
-	// for k, v := range storage.counters {
-	// 	header += k + ": " + fmt.Sprint(v) + "\n"
-	// }
-	// for k, v := range storage.gauges {
-	// 	header += k + ": " + fmt.Sprint(v) + "\n"
-	// }
 	body := "dfgdgfsdds"
+
 	res.WriteHeader(statusRes)
 	res.Write([]byte(body))
 }
