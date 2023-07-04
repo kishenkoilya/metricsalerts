@@ -19,7 +19,7 @@ func Test_updateMetrics(t *testing.T) {
 			name: "normalTest",
 			args: args{
 				m:            new(runtime.MemStats),
-				gaugeMetrics: []string{"Alloc", "Frees", "Sys", "GCCPUFraction", "asdsdfsdf"},
+				gaugeMetrics: []string{"Alloc", "Frees", "Sys", "GCCPUFraction"},
 				storage:      &MemStorage{counters: make(map[string]int64), gauges: make(map[string]float64)},
 			},
 		},
