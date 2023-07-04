@@ -50,6 +50,22 @@ func sendMetrics(storage *MemStorage) {
 		}
 		resp.Body.Close()
 	}
+	for metric, value := range storage.counters {
+		resp, err := http.Post("http://localhost:8080/update/counter/"+metric+"/"+fmt.Sprint(value), "text/plain", http.NoBody)
+		if err != nil {
+			panic(err)
+		} else {
+			fmt.Println(resp.Proto + " " + resp.Status)
+			for k, v := range resp.Header {
+				fmt.Print(k + ": ")
+				for _, s := range v {
+					fmt.Print(fmt.Sprint(s))
+				}
+				fmt.Print("\n")
+			}
+		}
+		resp.Body.Close()
+	}
 }
 
 func main() {
