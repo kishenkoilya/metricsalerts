@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"net/http"
 	"reflect"
 	"runtime"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
 
 type MemStorage struct {
@@ -34,13 +35,15 @@ func updateMetrics(m *runtime.MemStats, gaugeMetrics []string, storage *MemStora
 }
 
 func sendMetrics(storage *MemStorage) {
+	client := resty.New()
+
 	for metric, value := range storage.gauges {
-		resp, err := http.Post("http://localhost:8080/update/gauge/"+metric+"/"+fmt.Sprint(value), "text/plain", http.NoBody)
+		resp, err := client.R().Post("http://localhost:8080/update/gauge/" + metric + "/" + fmt.Sprint(value))
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		} else {
-			fmt.Println(resp.Proto + " " + resp.Status)
-			for k, v := range resp.Header {
+			fmt.Println(resp.Proto() + " " + resp.Status())
+			for k, v := range resp.Header() {
 				fmt.Print(k + ": ")
 				for _, s := range v {
 					fmt.Print(fmt.Sprint(s))
@@ -48,15 +51,14 @@ func sendMetrics(storage *MemStorage) {
 				fmt.Print("\n")
 			}
 		}
-		resp.Body.Close()
 	}
 	for metric, value := range storage.counters {
-		resp, err := http.Post("http://localhost:8080/update/counter/"+metric+"/"+fmt.Sprint(value), "text/plain", http.NoBody)
+		resp, err := client.R().Post("http://localhost:8080/update/counter/" + metric + "/" + fmt.Sprint(value))
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		} else {
-			fmt.Println(resp.Proto + " " + resp.Status)
-			for k, v := range resp.Header {
+			fmt.Println(resp.Proto() + " " + resp.Status())
+			for k, v := range resp.Header() {
 				fmt.Print(k + ": ")
 				for _, s := range v {
 					fmt.Print(fmt.Sprint(s))
@@ -64,8 +66,16 @@ func sendMetrics(storage *MemStorage) {
 				fmt.Print("\n")
 			}
 		}
-		resp.Body.Close()
 	}
+}
+
+func getMetrics(metricType, metricName string) *resty.Response {
+	client := resty.New()
+	resp, err := client.R().Get("http://localhost:8080/update/" + metricType + "/" + metricName)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return resp
 }
 
 func main() {
@@ -84,6 +94,9 @@ func main() {
 		if i%5 == 0 {
 			sendMetrics(&storage)
 			i = 0
+			resp := getMetrics("gauge", "HeapAlloc")
+			fmt.Println(resp.RawResponse)
+			fmt.Println(resp.Status())
 		}
 	}
 
