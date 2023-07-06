@@ -61,6 +61,19 @@ func main() {
 }
 
 func printAllPage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
+	if req.Method != http.MethodGet {
+		res.WriteHeader(http.StatusNotFound)
+		res.Write([]byte(""))
+		return
+	}
+	pathSplit := strings.Split(req.URL.Path, "/")
+	for _, v := range pathSplit {
+		if v != "" {
+			res.WriteHeader(http.StatusNotFound)
+			res.Write([]byte(""))
+			return
+		}
+	}
 	res.WriteHeader(http.StatusOK)
 	res.Write([]byte(storage.printAll()))
 }
@@ -130,13 +143,13 @@ func saveValues(storage *memStorage, mType, mName, mVal string) int {
 	if mType == "counter" {
 		res, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {
-			return http.StatusNotFound
+			return http.StatusBadRequest
 		}
 		storage.putCounter(mName, res)
 	} else if mType == "gauge" {
 		res, err := strconv.ParseFloat(mVal, 64)
 		if err != nil {
-			return http.StatusNotFound
+			return http.StatusBadRequest
 		}
 		storage.putGauge(mName, res)
 	}
