@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	routing "github.com/go-ozzo/ozzo-routing/v2"
 )
 
 type memStorage struct {
@@ -43,18 +45,25 @@ func (m *memStorage) printAll() string {
 
 func main() {
 	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
-	mux := http.NewServeMux()
-	mux.HandleFunc(`/update/`, func(res http.ResponseWriter, req *http.Request) {
-		updatePage(res, req, &storage)
-	})
-	mux.HandleFunc(`/value/`, func(res http.ResponseWriter, req *http.Request) {
-		getPage(res, req, &storage)
-	})
-	mux.HandleFunc(`/`, func(res http.ResponseWriter, req *http.Request) {
-		printAllPage(res, req, &storage)
-	})
 
-	err := http.ListenAndServe(`:8080`, mux)
+	router := routing.New()
+	update := router.Group("/update/")
+	update.Use(routing.HTTPHandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		updatePage(res, req, &storage)
+	}))
+
+	value := router.Group("/value/")
+	value.Use(routing.HTTPHandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		getPage(res, req, &storage)
+	}))
+
+	empty := router.Group("/")
+	empty.Use(routing.HTTPHandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		printAllPage(res, req, &storage)
+	}))
+
+	http.Handle("/", router)
+	err := http.ListenAndServe(`:8080`, nil)
 	if err != nil {
 		panic(err)
 	}
