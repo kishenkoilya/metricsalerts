@@ -268,7 +268,7 @@ func Test_saveValues(t *testing.T) {
 				mName:   "sdfs",
 				mVal:    "0.23sdf412",
 			},
-			want: http.StatusNotFound,
+			want: http.StatusBadRequest,
 		},
 		{
 			name: "Test4",
@@ -278,7 +278,7 @@ func Test_saveValues(t *testing.T) {
 				mName:   "sdfs",
 				mVal:    "0.23sdf412",
 			},
-			want: http.StatusNotFound,
+			want: http.StatusBadRequest,
 		},
 	}
 	for _, tt := range tests {
