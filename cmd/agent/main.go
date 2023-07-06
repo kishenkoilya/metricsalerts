@@ -91,18 +91,18 @@ func main() {
 		updateMetrics(&m, gaugeMetrics, &storage)
 		i++
 		time.Sleep(2 * time.Second)
-		if i%5 == 0 {
+		if i%2 == 0 {
 			sendMetrics(&storage)
 			i = 0
 			// resp := getMetrics("gauge", "HeapAlloc")
-			// client := resty.New()
-			// resp, err := client.R().Post("http://localhost:8080/update/counter/")
-			// if err != nil {
-			// 	fmt.Println(err)
-			// }
-			// fmt.Println(resp.RawResponse)
-			// fmt.Println(resp.Status())
-			// return
+			client := resty.New()
+			resp, err := client.R().Post("http://localhost:8080/update/counter/testCounter/100")
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println(resp.RawResponse)
+			fmt.Println(resp.Status())
+			return
 		}
 	}
 

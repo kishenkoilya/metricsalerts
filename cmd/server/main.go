@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	routing "github.com/go-ozzo/ozzo-routing/v2"
+	"github.com/go-ozzo/ozzo-routing/v2/access"
+	"github.com/go-ozzo/ozzo-routing/v2/fault"
+	"github.com/go-ozzo/ozzo-routing/v2/slash"
 )
 
 type memStorage struct {
@@ -45,81 +49,85 @@ func (m *memStorage) printAll() string {
 
 func main() {
 	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
-
 	router := routing.New()
-	update := router.Group("/update/")
-	update.Use(routing.HTTPHandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		updatePage(res, req, &storage)
-	}))
 
-	value := router.Group("/value/")
-	value.Use(routing.HTTPHandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		getPage(res, req, &storage)
-	}))
+	router.Use(
+		access.Logger(log.Printf),
+		slash.Remover(http.StatusMovedPermanently),
+		fault.Recovery(log.Printf),
+	)
 
-	empty := router.Group("/")
-	empty.Use(routing.HTTPHandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		printAllPage(res, req, &storage)
-	}))
+	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(&storage))
+	router.Get("/value/<mType>/<mName>", getPage(&storage))
+	router.Get("/", printAllPage(&storage))
 
 	http.Handle("/", router)
-	err := http.ListenAndServe(`:8080`, nil)
+	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func printAllPage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
-	if req.Method != http.MethodGet {
-		res.WriteHeader(http.StatusNotFound)
-		res.Write([]byte(""))
-		return
-	}
-	pathSplit := strings.Split(req.URL.Path, "/")
-	for _, v := range pathSplit {
-		if v != "" {
-			res.WriteHeader(http.StatusNotFound)
-			res.Write([]byte(""))
-			return
+func printAllPage(storage *memStorage) routing.Handler {
+	return func(c *routing.Context) error {
+		log.Println("printAll" + c.Request.Method)
+		if c.Request.Method != http.MethodGet {
+			c.Response.WriteHeader(http.StatusNotFound)
+
+			return c.Write([]byte(""))
 		}
+		pathSplit := strings.Split(c.Request.URL.Path, "/")
+		for _, v := range pathSplit {
+			if v != "" {
+				c.Response.WriteHeader(http.StatusNotFound)
+
+				return c.Write([]byte(""))
+			}
+		}
+		c.Response.WriteHeader(http.StatusOK)
+		return c.Write([]byte(storage.printAll()))
 	}
-	res.WriteHeader(http.StatusOK)
-	res.Write([]byte(storage.printAll()))
 }
 
-func getPage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
-	body := ""
-	statusRes, mType, mName, _ := parsePath(req.URL.Path)
-	if statusRes == http.StatusOK {
-		statusRes = validateValues(mType, mName)
-		if statusRes == http.StatusOK && req.Method == http.MethodGet {
-			statusRes, body = getValue(storage, mType, mName)
-		} else {
-			statusRes = http.StatusBadRequest
-			res.Write([]byte("NOT GET"))
+func getPage(storage *memStorage) routing.Handler {
+	return func(c *routing.Context) error {
+		log.Println("printAll" + c.Request.Method)
+		body := ""
+		statusRes, mType, mName, _ := parsePath(c.Request.URL.Path)
+		if statusRes == http.StatusOK {
+			statusRes = validateValues(mType, mName)
+			if statusRes == http.StatusOK && c.Request.Method == http.MethodGet {
+				statusRes, body = getValue(storage, mType, mName)
+			} else {
+				statusRes = http.StatusBadRequest
+				c.Response.Write([]byte("NOT GET"))
+			}
 		}
+		c.Response.WriteHeader(statusRes)
+		return c.Write([]byte(body))
 	}
-	res.WriteHeader(statusRes)
-	res.Write([]byte(body))
 }
 
-func updatePage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
-	body := ""
-	statusRes, mType, mName, mVal := parsePath(req.URL.Path)
-	// fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
-	if statusRes == http.StatusOK {
-		statusRes = validateValues(mType, mName)
-		// fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
-		if statusRes == http.StatusOK && req.Method == http.MethodPost {
-			statusRes = saveValues(storage, mType, mName, mVal)
-			// fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
-		} else {
-			statusRes = http.StatusBadRequest
-			body = "NOT POST NOR GET"
+func updatePage(storage *memStorage) routing.Handler {
+	return func(c *routing.Context) error {
+		log.Println("UPDATE" + c.Request.Method)
+		body := ""
+		statusRes, mType, mName, mVal := parsePath(c.Request.URL.Path)
+		log.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
+		if statusRes == http.StatusOK {
+			statusRes = validateValues(mType, mName)
+			log.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
+			if statusRes == http.StatusOK && c.Request.Method == http.MethodPost {
+				statusRes = saveValues(storage, mType, mName, mVal)
+				log.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
+			} else {
+				statusRes = http.StatusBadRequest
+				body = "NOT POST NOR GET"
+			}
 		}
+		c.Response.WriteHeader(statusRes)
+		return c.Write([]byte(body))
 	}
-	res.WriteHeader(statusRes)
-	res.Write([]byte(body))
 }
 
 func parsePath(path string) (int, string, string, string) {
