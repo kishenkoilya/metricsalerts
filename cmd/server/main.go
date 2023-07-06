@@ -17,7 +17,7 @@ func (m *memStorage) putCounter(nameC string, value int64) {
 }
 
 func (m *memStorage) putGauge(nameG string, value float64) {
-	m.gauges[nameG] += value
+	m.gauges[nameG] = value
 }
 
 func (m *memStorage) getCounter(nameC string) (int64, bool) {
@@ -97,13 +97,13 @@ func getPage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
 func updatePage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
 	body := ""
 	statusRes, mType, mName, mVal := parsePath(req.URL.Path)
-	fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
+	// fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
 	if statusRes == http.StatusOK {
 		statusRes = validateValues(mType, mName)
-		fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
+		// fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
 		if statusRes == http.StatusOK && req.Method == http.MethodPost {
 			statusRes = saveValues(storage, mType, mName, mVal)
-			fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
+			// fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
 		} else {
 			statusRes = http.StatusBadRequest
 			body = "NOT POST NOR GET"
