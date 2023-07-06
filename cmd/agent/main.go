@@ -71,7 +71,7 @@ func sendMetrics(storage *MemStorage) {
 
 func getMetrics(metricType, metricName string) *resty.Response {
 	client := resty.New()
-	resp, err := client.R().Get("http://localhost:8080/update/" + metricType + "/" + metricName)
+	resp, err := client.R().Get("http://localhost:8080/value/" + metricType + "/" + metricName)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -94,9 +94,15 @@ func main() {
 		if i%5 == 0 {
 			sendMetrics(&storage)
 			i = 0
-			resp := getMetrics("gauge", "HeapAlloc")
-			fmt.Println(resp.RawResponse)
-			fmt.Println(resp.Status())
+			// resp := getMetrics("gauge", "HeapAlloc")
+			// client := resty.New()
+			// resp, err := client.R().Post("http://localhost:8080/update/unknown/testCounter/100")
+			// if err != nil {
+			// 	fmt.Println(err)
+			// }
+			// fmt.Println(resp.RawResponse)
+			// fmt.Println(resp.Status())
+			// return
 		}
 	}
 

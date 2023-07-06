@@ -47,6 +47,9 @@ func main() {
 	mux.HandleFunc(`/update/`, func(res http.ResponseWriter, req *http.Request) {
 		updatePage(res, req, &storage)
 	})
+	mux.HandleFunc(`/value/`, func(res http.ResponseWriter, req *http.Request) {
+		getPage(res, req, &storage)
+	})
 	mux.HandleFunc(`/`, func(res http.ResponseWriter, req *http.Request) {
 		printAllPage(res, req, &storage)
 	})
@@ -62,17 +65,35 @@ func printAllPage(res http.ResponseWriter, req *http.Request, storage *memStorag
 	res.Write([]byte(storage.printAll()))
 }
 
+func getPage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
+	body := ""
+	statusRes, mType, mName, _ := parsePath(req.URL.Path)
+	if statusRes == http.StatusOK {
+		statusRes = validateValues(mType, mName)
+		if statusRes == http.StatusOK && req.Method == http.MethodGet {
+			statusRes, body = getValue(storage, mType, mName)
+		} else {
+			statusRes = http.StatusBadRequest
+			res.Write([]byte("NOT GET"))
+		}
+	}
+	res.WriteHeader(statusRes)
+	res.Write([]byte(body))
+}
+
 func updatePage(res http.ResponseWriter, req *http.Request, storage *memStorage) {
 	body := ""
 	statusRes, mType, mName, mVal := parsePath(req.URL.Path)
+	fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
 	if statusRes == http.StatusOK {
 		statusRes = validateValues(mType, mName)
+		fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
 		if statusRes == http.StatusOK && req.Method == http.MethodPost {
 			statusRes = saveValues(storage, mType, mName, mVal)
-		} else if statusRes == http.StatusOK && req.Method == http.MethodGet {
-			statusRes, body = getValue(storage, mType, mName)
+			fmt.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
 		} else {
-			res.Write([]byte("NOT POST NOR GET"))
+			statusRes = http.StatusBadRequest
+			body = "NOT POST NOR GET"
 		}
 	}
 	res.WriteHeader(statusRes)
@@ -109,13 +130,13 @@ func saveValues(storage *memStorage, mType, mName, mVal string) int {
 	if mType == "counter" {
 		res, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {
-			return http.StatusBadRequest
+			return http.StatusNotFound
 		}
 		storage.putCounter(mName, res)
 	} else if mType == "gauge" {
 		res, err := strconv.ParseFloat(mVal, 64)
 		if err != nil {
-			return http.StatusBadRequest
+			return http.StatusNotFound
 		}
 		storage.putGauge(mName, res)
 	}
