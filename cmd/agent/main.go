@@ -95,14 +95,14 @@ func main() {
 			sendMetrics(&storage)
 			i = 0
 			// resp := getMetrics("gauge", "HeapAlloc")
-			client := resty.New()
-			resp, err := client.R().Post("http://localhost:8080/updater/counter/testCounter/100")
-			if err != nil {
-				fmt.Println(err)
-			}
-			fmt.Println(resp.RawResponse)
-			fmt.Println(resp.Status())
-			return
+			// client := resty.New()
+			// resp, err := client.R().Post("http://localhost:8080/update/counter/")
+			// if err != nil {
+			// 	fmt.Println(err)
+			// }
+			// fmt.Println(resp.RawResponse)
+			// fmt.Println(resp.Status())
+			// return
 		}
 	}
 

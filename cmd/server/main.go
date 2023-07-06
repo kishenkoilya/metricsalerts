@@ -115,7 +115,7 @@ func updatePage(res http.ResponseWriter, req *http.Request, storage *memStorage)
 
 func parsePath(path string) (int, string, string, string) {
 	pathSplit := strings.Split(path, "/")
-	if len(pathSplit) < 4 {
+	if len(pathSplit) < 4 || pathSplit[3] == "" {
 		return http.StatusNotFound, "", "", ""
 	} else if len(pathSplit) < 5 {
 		return http.StatusOK, pathSplit[2], pathSplit[3], ""
