@@ -70,7 +70,6 @@ func main() {
 
 func printAllPage(storage *memStorage) routing.Handler {
 	return func(c *routing.Context) error {
-		log.Println("printAll" + c.Request.Method)
 		if c.Request.Method != http.MethodGet {
 			c.Response.WriteHeader(http.StatusNotFound)
 
@@ -91,17 +90,16 @@ func printAllPage(storage *memStorage) routing.Handler {
 
 func getPage(storage *memStorage) routing.Handler {
 	return func(c *routing.Context) error {
-		log.Println("printAll" + c.Request.Method)
+		mType := c.Param("mType")
+		mName := c.Param("mName")
 		body := ""
-		statusRes, mType, mName, _ := parsePath(c.Request.URL.Path)
+
+		statusRes := validateValues(mType, mName)
 		if statusRes == http.StatusOK {
-			statusRes = validateValues(mType, mName)
-			if statusRes == http.StatusOK && c.Request.Method == http.MethodGet {
-				statusRes, body = getValue(storage, mType, mName)
-			} else {
-				statusRes = http.StatusBadRequest
-				c.Response.Write([]byte("NOT GET"))
-			}
+			statusRes, body = getValue(storage, mType, mName)
+		} else {
+			c.Response.WriteHeader(statusRes)
+			return c.Write([]byte(""))
 		}
 		c.Response.WriteHeader(statusRes)
 		return c.Write([]byte(body))
@@ -110,34 +108,21 @@ func getPage(storage *memStorage) routing.Handler {
 
 func updatePage(storage *memStorage) routing.Handler {
 	return func(c *routing.Context) error {
-		log.Println("UPDATE" + c.Request.Method)
-		body := ""
-		statusRes, mType, mName, mVal := parsePath(c.Request.URL.Path)
-		log.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
+		mType := c.Param("mType")
+		mName := c.Param("mName")
+		mVal := c.Param("mVal")
+		body := "Update successful"
+
+		statusRes := validateValues(mType, mName)
 		if statusRes == http.StatusOK {
-			statusRes = validateValues(mType, mName)
-			log.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
-			if statusRes == http.StatusOK && c.Request.Method == http.MethodPost {
-				statusRes = saveValues(storage, mType, mName, mVal)
-				log.Println(fmt.Sprint(statusRes) + " " + mType + " " + mName + " " + mVal)
-			} else {
-				statusRes = http.StatusBadRequest
-				body = "NOT POST NOR GET"
-			}
+			statusRes = saveValues(storage, mType, mName, mVal)
+		} else {
+			statusRes = http.StatusBadRequest
+			body = "Bad request"
 		}
 		c.Response.WriteHeader(statusRes)
 		return c.Write([]byte(body))
 	}
-}
-
-func parsePath(path string) (int, string, string, string) {
-	pathSplit := strings.Split(path, "/")
-	if len(pathSplit) < 4 || pathSplit[3] == "" {
-		return http.StatusNotFound, "", "", ""
-	} else if len(pathSplit) < 5 {
-		return http.StatusOK, pathSplit[2], pathSplit[3], ""
-	}
-	return http.StatusOK, pathSplit[2], pathSplit[3], pathSplit[4]
 }
 
 func validateValues(mType, mName string) int {
