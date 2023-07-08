@@ -26,9 +26,9 @@ type AddressURL struct {
 }
 
 type Config struct {
-	address        string `env:"ADDRESS"`
-	reportInterval int    `env:"REPORT_INTERVAL"`
-	pollInterval   int    `env:"POLL_INTERVAL"`
+	Address        string `env:"ADDRESS"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
 }
 
 func (addr *AddressURL) AddrCommand(command, metricType, metricName, value string) string {
@@ -106,25 +106,31 @@ func main() {
 	// defer cancel()
 	ctx := context.Background()
 
+	address := flag.String("a", "localhost:8080", "An address the server will listen to")
+	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
+	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
+	flag.Parse()
+	fmt.Println(*address)
+	fmt.Println(*reportInterval)
+	fmt.Println(*pollInterval)
+
 	var cfg Config
 	error := env.Parse(&cfg)
 	if error != nil {
 		log.Fatal(error)
 	}
-
-	address := &cfg.address
-	reportInterval := &cfg.reportInterval
-	pollInterval := &cfg.pollInterval
-	if *address == "" {
-		address = flag.String("a", "localhost:8080", "An address the server will listen to")
+	if cfg.Address != "" {
+		address = &cfg.Address
 	}
-	if *reportInterval == 0 {
-		reportInterval = flag.Int("r", 10, "An interval for sending metrics to server")
+	if cfg.ReportInterval != 0 {
+		reportInterval = &cfg.ReportInterval
 	}
-	if *pollInterval == 0 {
-		pollInterval = flag.Int("p", 2, "An interval for collecting metrics")
+	if cfg.PollInterval != 0 {
+		pollInterval = &cfg.PollInterval
 	}
-	flag.Parse()
+	fmt.Println(*address)
+	fmt.Println(*reportInterval)
+	fmt.Println(*pollInterval)
 
 	addr := AddressURL{"http", *address}
 
