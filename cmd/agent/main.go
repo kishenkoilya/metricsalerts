@@ -112,21 +112,21 @@ func main() {
 		log.Fatal(error)
 	}
 
-	address := cfg.address
-	reportInterval := cfg.reportInterval
-	pollInterval := cfg.pollInterval
-	if address == "" {
-		address = *flag.String("a", "localhost:8080", "An address the server will listen to")
+	address := &cfg.address
+	reportInterval := &cfg.reportInterval
+	pollInterval := &cfg.pollInterval
+	if *address == "" {
+		address = flag.String("a", "localhost:8080", "An address the server will listen to")
 	}
-	if reportInterval == 0 {
-		reportInterval = *flag.Int("r", 10, "An interval for sending metrics to server")
+	if *reportInterval == 0 {
+		reportInterval = flag.Int("r", 10, "An interval for sending metrics to server")
 	}
-	if pollInterval == 0 {
-		pollInterval = *flag.Int("p", 2, "An interval for collecting metrics")
+	if *pollInterval == 0 {
+		pollInterval = flag.Int("p", 2, "An interval for collecting metrics")
 	}
 	flag.Parse()
 
-	addr := AddressURL{"http", address}
+	addr := AddressURL{"http", *address}
 
 	gaugeMetrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
@@ -140,7 +140,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(*pollInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {
@@ -156,7 +156,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(reportInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(*reportInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {

@@ -8,12 +8,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/caarlos0/env/v6"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/go-ozzo/ozzo-routing/v2/access"
 	"github.com/go-ozzo/ozzo-routing/v2/fault"
 	"github.com/go-ozzo/ozzo-routing/v2/slash"
-
-	"github.com/caarlos0/env/v6"
 )
 
 func main() {
@@ -22,13 +21,12 @@ func main() {
 	if error != nil {
 		log.Fatal(error)
 	}
-	addr := cfg.Address
+	addr := &cfg.Address
 
 	if cfg.Address == "" {
-		addr = *flag.String("a", "localhost:8080", "An address the server will listen to")
+		addr = flag.String("a", "localhost:8080", "An address the server will listen to")
 		flag.Parse()
 	}
-	fmt.Println(addr)
 
 	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
 	router := routing.New()
@@ -44,7 +42,7 @@ func main() {
 	router.Get("/", printAllPage(&storage))
 
 	http.Handle("/", router)
-	err := http.ListenAndServe(addr, nil)
+	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		panic(err)
 	}
