@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"reflect"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -13,6 +16,19 @@ import (
 type MemStorage struct {
 	counters map[string]int64
 	gauges   map[string]float64
+}
+
+type AddressURL struct {
+	protocol string
+	address  string
+	port     string
+}
+
+func (addr *AddressURL) AddrCommand(command, metricType, metricName, value string) string {
+	if value == "" {
+		return addr.protocol + "://" + addr.address + ":" + addr.port + "/" + command + "/" + metricType + "/" + metricName
+	}
+	return addr.protocol + "://" + addr.address + ":" + addr.port + "/" + command + "/" + metricType + "/" + metricName + "/" + value
 }
 
 func updateMetrics(m *runtime.MemStats, gaugeMetrics []string, storage *MemStorage) {
@@ -34,11 +50,11 @@ func updateMetrics(m *runtime.MemStats, gaugeMetrics []string, storage *MemStora
 	storage.gauges["RandomValue"] = rand.Float64()
 }
 
-func sendMetrics(storage *MemStorage) {
+func sendMetrics(storage *MemStorage, addr *AddressURL) {
 	client := resty.New()
 
 	for metric, value := range storage.gauges {
-		resp, err := client.R().Post("http://localhost:8080/update/gauge/" + metric + "/" + fmt.Sprint(value))
+		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
 		if err != nil {
 			fmt.Println(err)
 		} else {
@@ -53,7 +69,7 @@ func sendMetrics(storage *MemStorage) {
 		}
 	}
 	for metric, value := range storage.counters {
-		resp, err := client.R().Post("http://localhost:8080/update/counter/" + metric + "/" + fmt.Sprint(value))
+		resp, err := client.R().Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
 		if err != nil {
 			fmt.Println(err)
 		} else {
@@ -69,9 +85,9 @@ func sendMetrics(storage *MemStorage) {
 	}
 }
 
-func getMetrics(metricType, metricName string) *resty.Response {
+func getMetrics(metricType, metricName string, addr *AddressURL) *resty.Response {
 	client := resty.New()
-	resp, err := client.R().Get("http://localhost:8080/value/" + metricType + "/" + metricName)
+	resp, err := client.R().Get(addr.AddrCommand("value", metricType, metricName, "")) //"http://localhost:8080/value/" + metricType + "/" + metricName)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -79,6 +95,17 @@ func getMetrics(metricType, metricName string) *resty.Response {
 }
 
 func main() {
+	// ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// defer cancel()
+	ctx := context.Background()
+
+	port := flag.Int("a", 8080, "A port the server will listen to")
+	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
+	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
+	flag.Parse()
+
+	addr := AddressURL{"http", "localhost", fmt.Sprint(*port)}
+
 	gaugeMetrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
 		"MCacheInuse", "MCacheSys", "MSpanInuse", "MSpanSys", "Mallocs", "NextGC", "NumForcedGC",
@@ -86,24 +113,44 @@ func main() {
 	storage := MemStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
 	var m runtime.MemStats
 
-	i := 0
-	for {
-		updateMetrics(&m, gaugeMetrics, &storage)
-		i++
-		time.Sleep(2 * time.Second)
-		if i%2 == 0 {
-			sendMetrics(&storage)
-			i = 0
-			// resp := getMetrics("gauge", "HeapAlloc")
-			client := resty.New()
-			resp, err := client.R().Post("http://localhost:8080/update/counter/testCounter/100")
-			if err != nil {
-				fmt.Println(err)
-			}
-			fmt.Println(resp.RawResponse)
-			fmt.Println(resp.Status())
-			return
-		}
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
 
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Duration(*pollInterval) * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// fmt.Println("Updating metrics")
+				updateMetrics(&m, gaugeMetrics, &storage)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Duration(*reportInterval) * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				// fmt.Println("Sending metrics")
+				sendMetrics(&storage, &addr)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// cancel()
+
+	wg.Wait()
+
+	fmt.Println("Программа завершена")
 }

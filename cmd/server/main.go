@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -48,6 +49,9 @@ func (m *memStorage) printAll() string {
 }
 
 func main() {
+	port := flag.Int("a", 8080, "A port the server will listen to")
+	flag.Parse()
+
 	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
 	router := routing.New()
 
@@ -62,7 +66,7 @@ func main() {
 	router.Get("/", printAllPage(&storage))
 
 	http.Handle("/", router)
-	err := http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":"+fmt.Sprint(*port), nil)
 	if err != nil {
 		panic(err)
 	}
@@ -70,18 +74,10 @@ func main() {
 
 func printAllPage(storage *memStorage) routing.Handler {
 	return func(c *routing.Context) error {
-		if c.Request.Method != http.MethodGet {
+		path := strings.Trim(c.Request.URL.Path, "/")
+		if path != "" {
 			c.Response.WriteHeader(http.StatusNotFound)
-
 			return c.Write([]byte(""))
-		}
-		pathSplit := strings.Split(c.Request.URL.Path, "/")
-		for _, v := range pathSplit {
-			if v != "" {
-				c.Response.WriteHeader(http.StatusNotFound)
-
-				return c.Write([]byte(""))
-			}
 		}
 		c.Response.WriteHeader(http.StatusOK)
 		return c.Write([]byte(storage.printAll()))
@@ -98,8 +94,7 @@ func getPage(storage *memStorage) routing.Handler {
 		if statusRes == http.StatusOK {
 			statusRes, body = getValue(storage, mType, mName)
 		} else {
-			c.Response.WriteHeader(statusRes)
-			return c.Write([]byte(""))
+			body = "Bad request"
 		}
 		c.Response.WriteHeader(statusRes)
 		return c.Write([]byte(body))
@@ -117,7 +112,6 @@ func updatePage(storage *memStorage) routing.Handler {
 		if statusRes == http.StatusOK {
 			statusRes = saveValues(storage, mType, mName, mVal)
 		} else {
-			statusRes = http.StatusBadRequest
 			body = "Bad request"
 		}
 		c.Response.WriteHeader(statusRes)
