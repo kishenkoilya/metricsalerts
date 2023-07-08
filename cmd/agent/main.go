@@ -21,14 +21,13 @@ type MemStorage struct {
 type AddressURL struct {
 	protocol string
 	address  string
-	port     string
 }
 
 func (addr *AddressURL) AddrCommand(command, metricType, metricName, value string) string {
 	if value == "" {
-		return addr.protocol + "://" + addr.address + ":" + addr.port + "/" + command + "/" + metricType + "/" + metricName
+		return addr.protocol + "://" + addr.address + "/" + command + "/" + metricType + "/" + metricName
 	}
-	return addr.protocol + "://" + addr.address + ":" + addr.port + "/" + command + "/" + metricType + "/" + metricName + "/" + value
+	return addr.protocol + "://" + addr.address + "/" + command + "/" + metricType + "/" + metricName + "/" + value
 }
 
 func updateMetrics(m *runtime.MemStats, gaugeMetrics []string, storage *MemStorage) {
@@ -99,12 +98,12 @@ func main() {
 	// defer cancel()
 	ctx := context.Background()
 
-	port := flag.Int("a", 8080, "A port the server will listen to")
+	address := flag.String("a", "localhost:8080", "An address the server will listen to")
 	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
 	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
 	flag.Parse()
 
-	addr := AddressURL{"http", "localhost", fmt.Sprint(*port)}
+	addr := AddressURL{"http", *address}
 
 	gaugeMetrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",

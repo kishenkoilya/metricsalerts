@@ -49,7 +49,7 @@ func (m *memStorage) printAll() string {
 }
 
 func main() {
-	port := flag.Int("a", 8080, "A port the server will listen to")
+	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
 	flag.Parse()
 
 	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
@@ -66,7 +66,7 @@ func main() {
 	router.Get("/", printAllPage(&storage))
 
 	http.Handle("/", router)
-	err := http.ListenAndServe(":"+fmt.Sprint(*port), nil)
+	err := http.ListenAndServe(*addr, nil)
 	if err != nil {
 		panic(err)
 	}
