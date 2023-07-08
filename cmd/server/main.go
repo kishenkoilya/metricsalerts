@@ -12,7 +12,47 @@ import (
 	"github.com/go-ozzo/ozzo-routing/v2/access"
 	"github.com/go-ozzo/ozzo-routing/v2/fault"
 	"github.com/go-ozzo/ozzo-routing/v2/slash"
+
+	"github.com/caarlos0/env/v6"
 )
+
+func main() {
+	var cfg Config
+	error := env.Parse(&cfg)
+	if error != nil {
+		log.Fatal(error)
+	}
+	addr := cfg.Address
+
+	if cfg.Address == "" {
+		addr = *flag.String("a", "localhost:8080", "An address the server will listen to")
+		flag.Parse()
+	}
+	fmt.Println(addr)
+
+	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
+	router := routing.New()
+
+	router.Use(
+		access.Logger(log.Printf),
+		slash.Remover(http.StatusMovedPermanently),
+		fault.Recovery(log.Printf),
+	)
+
+	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(&storage))
+	router.Get("/value/<mType>/<mName>", getPage(&storage))
+	router.Get("/", printAllPage(&storage))
+
+	http.Handle("/", router)
+	err := http.ListenAndServe(addr, nil)
+	if err != nil {
+		panic(err)
+	}
+}
+
+type Config struct {
+	Address string `env:"ADDRESS"`
+}
 
 type memStorage struct {
 	counters map[string]int64
@@ -46,30 +86,6 @@ func (m *memStorage) printAll() string {
 		res += k + ": " + fmt.Sprint(v)
 	}
 	return res
-}
-
-func main() {
-	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
-	flag.Parse()
-
-	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
-	router := routing.New()
-
-	router.Use(
-		access.Logger(log.Printf),
-		slash.Remover(http.StatusMovedPermanently),
-		fault.Recovery(log.Printf),
-	)
-
-	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(&storage))
-	router.Get("/value/<mType>/<mName>", getPage(&storage))
-	router.Get("/", printAllPage(&storage))
-
-	http.Handle("/", router)
-	err := http.ListenAndServe(*addr, nil)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func printAllPage(storage *memStorage) routing.Handler {

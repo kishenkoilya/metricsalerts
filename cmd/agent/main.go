@@ -4,12 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
 	"reflect"
 	"runtime"
 	"sync"
 	"time"
 
+	"github.com/caarlos0/env/v6"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -21,6 +23,12 @@ type MemStorage struct {
 type AddressURL struct {
 	protocol string
 	address  string
+}
+
+type Config struct {
+	address        string `env:"ADDRESS"`
+	reportInterval int    `env:"REPORT_INTERVAL"`
+	pollInterval   int    `env:"POLL_INTERVAL"`
 }
 
 func (addr *AddressURL) AddrCommand(command, metricType, metricName, value string) string {
@@ -98,12 +106,27 @@ func main() {
 	// defer cancel()
 	ctx := context.Background()
 
-	address := flag.String("a", "localhost:8080", "An address the server will listen to")
-	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
-	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
+	var cfg Config
+	error := env.Parse(&cfg)
+	if error != nil {
+		log.Fatal(error)
+	}
+
+	address := cfg.address
+	reportInterval := cfg.reportInterval
+	pollInterval := cfg.pollInterval
+	if address == "" {
+		address = *flag.String("a", "localhost:8080", "An address the server will listen to")
+	}
+	if reportInterval == 0 {
+		reportInterval = *flag.Int("r", 10, "An interval for sending metrics to server")
+	}
+	if pollInterval == 0 {
+		pollInterval = *flag.Int("p", 2, "An interval for collecting metrics")
+	}
 	flag.Parse()
 
-	addr := AddressURL{"http", *address}
+	addr := AddressURL{"http", address}
 
 	gaugeMetrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
@@ -117,7 +140,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(*pollInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {
@@ -133,7 +156,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(*reportInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(reportInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {
