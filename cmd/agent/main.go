@@ -101,11 +101,7 @@ func getMetrics(metricType, metricName string, addr *AddressURL) *resty.Response
 	return resp
 }
 
-func main() {
-	// ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	// defer cancel()
-	ctx := context.Background()
-
+func getVars() (string, int, int) {
 	address := flag.String("a", "localhost:8080", "An address the server will listen to")
 	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
 	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
@@ -131,8 +127,17 @@ func main() {
 	fmt.Println(*address)
 	fmt.Println(*reportInterval)
 	fmt.Println(*pollInterval)
+	return *address, *reportInterval, *pollInterval
+}
 
-	addr := AddressURL{"http", *address}
+func main() {
+	// ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// defer cancel()
+	ctx := context.Background()
+
+	address, reportInterval, pollInterval := getVars()
+
+	addr := AddressURL{"http", address}
 
 	gaugeMetrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
@@ -146,7 +151,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(*pollInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {
@@ -162,7 +167,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(*reportInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(reportInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {

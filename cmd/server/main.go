@@ -152,7 +152,7 @@ func getValue(storage *memStorage, mType, mName string) (int, string) {
 	return status, res
 }
 
-func main() {
+func getVars() string {
 	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
 	flag.Parse()
 	fmt.Println(*addr)
@@ -166,6 +166,11 @@ func main() {
 		addr = &cfg.Address
 	}
 	fmt.Println(*addr)
+	return *addr
+}
+
+func main() {
+	addr := getVars()
 
 	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
 	router := routing.New()
@@ -181,7 +186,7 @@ func main() {
 	router.Get("/", printAllPage(&storage))
 
 	http.Handle("/", router)
-	err := http.ListenAndServe(*addr, nil)
+	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		panic(err)
 	}
