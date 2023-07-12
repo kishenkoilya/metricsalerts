@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kishenkoilya/metricsalerts/internal/MemStorage"
+	"github.com/kishenkoilya/metricsalerts/internal/memStorage"
 )
 
 func Test_validateValues(t *testing.T) {
@@ -70,7 +70,7 @@ func Test_validateValues(t *testing.T) {
 
 func Test_saveValues(t *testing.T) {
 	type args struct {
-		storage *MemStorage.MemStorage
+		storage *memStorage.MemStorage
 		mType   string
 		mName   string
 		mVal    string
@@ -83,7 +83,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test1",
 			args: args{
-				storage: MemStorage.NewMemStorage(),
+				storage: memStorage.NewMemStorage(),
 				mType:   "gauge",
 				mName:   "sdfs",
 				mVal:    "0.23412",
@@ -93,7 +93,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test2",
 			args: args{
-				storage: MemStorage.NewMemStorage(),
+				storage: memStorage.NewMemStorage(),
 				mType:   "counter",
 				mName:   "sdfs",
 				mVal:    "23412",
@@ -103,7 +103,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test3",
 			args: args{
-				storage: MemStorage.NewMemStorage(),
+				storage: memStorage.NewMemStorage(),
 				mType:   "gauge",
 				mName:   "sdfs",
 				mVal:    "0.23sdf412",
@@ -113,7 +113,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test4",
 			args: args{
-				storage: MemStorage.NewMemStorage(),
+				storage: memStorage.NewMemStorage(),
 				mType:   "counter",
 				mName:   "sdfs",
 				mVal:    "0.23sdf412",
@@ -132,7 +132,7 @@ func Test_saveValues(t *testing.T) {
 
 func Test_getValue(t *testing.T) {
 	type args struct {
-		storage *MemStorage.MemStorage
+		storage *memStorage.MemStorage
 		mType   string
 		mName   string
 	}
@@ -145,7 +145,7 @@ func Test_getValue(t *testing.T) {
 		{
 			name: "Test1",
 			args: args{
-				storage: &MemStorage.MemStorage{
+				storage: &memStorage.MemStorage{
 					Mutex:    sync.RWMutex{},
 					Counters: map[string]int64{"asdf": 10},
 					Gauges:   map[string]float64{"qwer": 0.4543},
@@ -159,7 +159,7 @@ func Test_getValue(t *testing.T) {
 		{
 			name: "Test2",
 			args: args{
-				storage: &MemStorage.MemStorage{
+				storage: &memStorage.MemStorage{
 					Mutex:    sync.RWMutex{},
 					Counters: map[string]int64{"asdf": 10},
 					Gauges:   map[string]float64{"qwer": 0.4543},
@@ -173,7 +173,7 @@ func Test_getValue(t *testing.T) {
 		{
 			name: "Test3",
 			args: args{
-				storage: &MemStorage.MemStorage{
+				storage: &memStorage.MemStorage{
 					Mutex:    sync.RWMutex{},
 					Counters: map[string]int64{"asdf": 10},
 					Gauges:   map[string]float64{"qwer": 0.4543},
@@ -187,7 +187,7 @@ func Test_getValue(t *testing.T) {
 		{
 			name: "Test4",
 			args: args{
-				storage: &MemStorage.MemStorage{
+				storage: &memStorage.MemStorage{
 					Mutex:    sync.RWMutex{},
 					Counters: map[string]int64{"asdf": 10},
 					Gauges:   map[string]float64{"qwer": 0.4543},

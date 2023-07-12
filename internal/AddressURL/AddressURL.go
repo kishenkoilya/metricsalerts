@@ -1,4 +1,4 @@
-package AddressURL
+package addressURL
 
 type AddressURL struct {
 	Protocol string
