@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -15,81 +16,36 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-type MemStorage struct {
-	counters map[string]int64
-	gauges   map[string]float64
-}
-
-type AddressURL struct {
-	protocol string
-	address  string
-}
-
 type Config struct {
 	Address        string `env:"ADDRESS"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
 }
 
-func (addr *AddressURL) AddrCommand(command, metricType, metricName, value string) string {
-	if value == "" {
-		return addr.protocol + "://" + addr.address + "/" + command + "/" + metricType + "/" + metricName
-	}
-	return addr.protocol + "://" + addr.address + "/" + command + "/" + metricType + "/" + metricName + "/" + value
-}
-
-func updateMetrics(m *runtime.MemStats, gaugeMetrics []string, storage *MemStorage) {
+func updateMetrics(m *runtime.MemStats, metrics []string, storage *memStorage) error {
 	runtime.ReadMemStats(m)
-	for _, metricName := range gaugeMetrics {
+	for _, metricName := range metrics {
 		value := reflect.ValueOf(*m).FieldByName(metricName)
 		if value.IsValid() {
 			// fmt.Println("Metric " + metricName + " equals " + value.String())
 			if value.CanFloat() {
-				storage.gauges[metricName] = value.Float()
+				storage.putGauge(metricName, value.Float())
 			} else if value.CanUint() {
-				storage.gauges[metricName] = float64(value.Uint())
+				storage.putGauge(metricName, float64(value.Uint()))
 			}
 		} else {
-			fmt.Println("Metric named " + metricName + " was not found in MemStats")
+			err := errors.New("Metric named " + metricName + " was not found in MemStats")
+			return err
 		}
 	}
-	storage.counters["PollCount"]++
-	storage.gauges["RandomValue"] = rand.Float64()
+	storage.putCounter("PollCount", 1)
+	storage.putGauge("RandomValue", rand.Float64())
+	return nil
 }
 
-func sendMetrics(storage *MemStorage, addr *AddressURL) {
-	client := resty.New()
-
-	for metric, value := range storage.gauges {
-		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
-		}
-	}
-	for metric, value := range storage.counters {
-		resp, err := client.R().Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
-		}
-	}
+func sendMetrics(storage *memStorage, addr *AddressURL) {
+	storage.sendGauges(addr)
+	storage.sendCounters(addr)
 }
 
 func getMetrics(metricType, metricName string, addr *AddressURL) *resty.Response {
@@ -139,11 +95,11 @@ func main() {
 
 	addr := AddressURL{"http", address}
 
-	gaugeMetrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
+	metrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
 		"MCacheInuse", "MCacheSys", "MSpanInuse", "MSpanSys", "Mallocs", "NextGC", "NumForcedGC",
 		"NumGC", "OtherSys", "PauseTotalNs", "StackInuse", "StackSys", "Sys", "TotalAlloc"}
-	storage := MemStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
+	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
 	var m runtime.MemStats
 
 	var wg sync.WaitGroup
@@ -158,7 +114,10 @@ func main() {
 			select {
 			case <-ticker.C:
 				// fmt.Println("Updating metrics")
-				updateMetrics(&m, gaugeMetrics, &storage)
+				err := updateMetrics(&m, metrics, &storage)
+				if err != nil {
+					panic(err)
+				}
 			case <-ctx.Done():
 				return
 			}

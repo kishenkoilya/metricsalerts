@@ -9,7 +9,7 @@ func Test_updateMetrics(t *testing.T) {
 	type args struct {
 		m            *runtime.MemStats
 		gaugeMetrics []string
-		storage      *MemStorage
+		storage      *memStorage
 	}
 	tests := []struct {
 		name string
@@ -20,7 +20,7 @@ func Test_updateMetrics(t *testing.T) {
 			args: args{
 				m:            new(runtime.MemStats),
 				gaugeMetrics: []string{"Alloc", "Frees", "Sys", "GCCPUFraction"},
-				storage:      &MemStorage{counters: make(map[string]int64), gauges: make(map[string]float64)},
+				storage:      &memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)},
 			},
 		},
 	}

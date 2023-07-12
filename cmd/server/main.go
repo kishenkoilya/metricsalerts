@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/caarlos0/env/v6"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
@@ -17,40 +18,6 @@ import (
 
 type Config struct {
 	Address string `env:"ADDRESS"`
-}
-
-type memStorage struct {
-	counters map[string]int64
-	gauges   map[string]float64
-}
-
-func (m *memStorage) putCounter(nameC string, value int64) {
-	m.counters[nameC] += value
-}
-
-func (m *memStorage) putGauge(nameG string, value float64) {
-	m.gauges[nameG] = value
-}
-
-func (m *memStorage) getCounter(nameC string) (int64, bool) {
-	res, ok := m.counters[nameC]
-	return res, ok
-}
-
-func (m *memStorage) getGauge(nameG string) (float64, bool) {
-	res, ok := m.gauges[nameG]
-	return res, ok
-}
-
-func (m *memStorage) printAll() string {
-	res := ""
-	for k, v := range m.counters {
-		res += k + ": " + fmt.Sprint(v)
-	}
-	for k, v := range m.gauges {
-		res += k + ": " + fmt.Sprint(v)
-	}
-	return res
 }
 
 func printAllPage(storage *memStorage) routing.Handler {
@@ -172,7 +139,7 @@ func getVars() string {
 func main() {
 	addr := getVars()
 
-	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
+	storage := memStorage{mutex: sync.RWMutex{}, counters: make(map[string]int64), gauges: make(map[string]float64)}
 	router := routing.New()
 
 	router.Use(

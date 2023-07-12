@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"sync"
 	"testing"
 )
 
@@ -19,6 +20,7 @@ func TestMemStorage_getCounter(t *testing.T) {
 		{
 			name: "Test1",
 			m: &memStorage{
+				sync.RWMutex{},
 				map[string]int64{"asdf": 10},
 				map[string]float64{"qwer": 0.4543},
 			},
@@ -29,6 +31,7 @@ func TestMemStorage_getCounter(t *testing.T) {
 		{
 			name: "Test2",
 			m: &memStorage{
+				sync.RWMutex{},
 				map[string]int64{"asdf": 10},
 				map[string]float64{"qwer": 0.4543},
 			},
@@ -64,6 +67,7 @@ func TestMemStorage_getGauge(t *testing.T) {
 		{
 			name: "Test1",
 			m: &memStorage{
+				sync.RWMutex{},
 				map[string]int64{"asdf": 10},
 				map[string]float64{"qwer": 0.4543},
 			},
@@ -74,6 +78,7 @@ func TestMemStorage_getGauge(t *testing.T) {
 		{
 			name: "Test2",
 			m: &memStorage{
+				sync.RWMutex{},
 				map[string]int64{"asdf": 10},
 				map[string]float64{"qwer": 0.4543},
 			},
@@ -170,7 +175,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test1",
 			args: args{
-				storage: &memStorage{make(map[string]int64), make(map[string]float64)},
+				storage: &memStorage{sync.RWMutex{}, make(map[string]int64), make(map[string]float64)},
 				mType:   "gauge",
 				mName:   "sdfs",
 				mVal:    "0.23412",
@@ -180,7 +185,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test2",
 			args: args{
-				storage: &memStorage{make(map[string]int64), make(map[string]float64)},
+				storage: &memStorage{sync.RWMutex{}, make(map[string]int64), make(map[string]float64)},
 				mType:   "counter",
 				mName:   "sdfs",
 				mVal:    "23412",
@@ -190,7 +195,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test3",
 			args: args{
-				storage: &memStorage{make(map[string]int64), make(map[string]float64)},
+				storage: &memStorage{sync.RWMutex{}, make(map[string]int64), make(map[string]float64)},
 				mType:   "gauge",
 				mName:   "sdfs",
 				mVal:    "0.23sdf412",
@@ -200,7 +205,7 @@ func Test_saveValues(t *testing.T) {
 		{
 			name: "Test4",
 			args: args{
-				storage: &memStorage{make(map[string]int64), make(map[string]float64)},
+				storage: &memStorage{sync.RWMutex{}, make(map[string]int64), make(map[string]float64)},
 				mType:   "counter",
 				mName:   "sdfs",
 				mVal:    "0.23sdf412",
@@ -233,6 +238,7 @@ func Test_getValue(t *testing.T) {
 			name: "Test1",
 			args: args{
 				storage: &memStorage{
+					sync.RWMutex{},
 					map[string]int64{"asdf": 10},
 					map[string]float64{"qwer": 0.4543},
 				},
@@ -246,6 +252,7 @@ func Test_getValue(t *testing.T) {
 			name: "Test2",
 			args: args{
 				storage: &memStorage{
+					sync.RWMutex{},
 					map[string]int64{"asdf": 10},
 					map[string]float64{"qwer": 0.4543},
 				},
@@ -259,6 +266,7 @@ func Test_getValue(t *testing.T) {
 			name: "Test3",
 			args: args{
 				storage: &memStorage{
+					sync.RWMutex{},
 					map[string]int64{"asdf": 10},
 					map[string]float64{"qwer": 0.4543},
 				},
@@ -272,6 +280,7 @@ func Test_getValue(t *testing.T) {
 			name: "Test4",
 			args: args{
 				storage: &memStorage{
+					sync.RWMutex{},
 					map[string]int64{"asdf": 10},
 					map[string]float64{"qwer": 0.4543},
 				},
