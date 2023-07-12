@@ -70,7 +70,7 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 
 func validateValues(mType, mName string) (int, error) {
 	if mType != "counter" && mType != "gauge" {
-		return http.StatusBadRequest, errors.New("Metric type not counter, nor gauge!")
+		return http.StatusBadRequest, errors.New("metric type not counter, nor gauge")
 	}
 	_, err := strconv.ParseInt(mName, 0, 64)
 	if err == nil {
