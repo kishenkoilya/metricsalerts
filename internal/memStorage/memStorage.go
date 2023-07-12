@@ -15,7 +15,7 @@ type MemStorage struct {
 }
 
 func NewMemStorage() *MemStorage {
-	return MemStorage{Mutex: sync.RWMutex{}, Counters: make(map[string]int64), Gauges: make(map[string]float64)}
+	return &MemStorage{Mutex: sync.RWMutex{}, Counters: make(map[string]int64), Gauges: make(map[string]float64)}
 }
 
 func (m *MemStorage) PutCounter(nameC string, value int64) {
