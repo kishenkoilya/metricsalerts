@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -38,11 +39,11 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 		mName := c.Param("mName")
 		body := ""
 
-		statusRes := validateValues(mType, mName)
-		if statusRes == http.StatusOK {
+		statusRes, err := validateValues(mType, mName)
+		if err == nil {
 			statusRes, body = getValue(storage, mType, mName)
 		} else {
-			body = "Bad request"
+			body = err.Error()
 		}
 		c.Response.WriteHeader(statusRes)
 		return c.Write([]byte(body))
@@ -56,31 +57,31 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 		mVal := c.Param("mVal")
 		body := "Update successful"
 
-		statusRes := validateValues(mType, mName)
-		if statusRes == http.StatusOK {
+		statusRes, err := validateValues(mType, mName)
+		if err == nil {
 			statusRes = saveValues(storage, mType, mName, mVal)
 		} else {
-			body = "Bad request"
+			body = err.Error()
 		}
 		c.Response.WriteHeader(statusRes)
 		return c.Write([]byte(body))
 	}
 }
 
-func validateValues(mType, mName string) int {
+func validateValues(mType, mName string) (int, error) {
 	if mType != "counter" && mType != "gauge" {
-		return http.StatusBadRequest
+		return http.StatusBadRequest, errors.New("Metric type not counter, nor gauge!")
 	}
 	_, err := strconv.ParseInt(mName, 0, 64)
 	if err == nil {
-		return http.StatusBadRequest
+		return http.StatusBadRequest, err
 	}
 	_, err = strconv.ParseFloat(mName, 64)
 	if err == nil {
-		return http.StatusBadRequest
+		return http.StatusBadRequest, err
 	}
 
-	return http.StatusOK
+	return http.StatusOK, nil
 }
 
 func saveValues(storage *memstorage.MemStorage, mType, mName, mVal string) int {

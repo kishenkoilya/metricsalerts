@@ -61,8 +61,8 @@ func Test_validateValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := validateValues(tt.args.mType, tt.args.mName); got != tt.want {
-				t.Errorf("validateValues() = %v, want %v", got, tt.want)
+			if got1, _ := validateValues(tt.args.mType, tt.args.mName); got1 != tt.want {
+				t.Errorf("validateValues() = %v, want %v", got1, tt.want)
 			}
 		})
 	}
