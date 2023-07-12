@@ -14,6 +14,8 @@ import (
 
 	"github.com/caarlos0/env/v6"
 	"github.com/go-resty/resty/v2"
+	"github.com/kishenkoilya/metricsalerts/internal/AddressURL"
+	"github.com/kishenkoilya/metricsalerts/internal/MemStorage"
 )
 
 type Config struct {
@@ -22,33 +24,33 @@ type Config struct {
 	PollInterval   int    `env:"POLL_INTERVAL"`
 }
 
-func updateMetrics(m *runtime.MemStats, metrics []string, storage *memStorage) error {
+func updateMetrics(m *runtime.MemStats, metrics []string, storage *MemStorage.MemStorage) error {
 	runtime.ReadMemStats(m)
 	for _, metricName := range metrics {
 		value := reflect.ValueOf(*m).FieldByName(metricName)
 		if value.IsValid() {
 			// fmt.Println("Metric " + metricName + " equals " + value.String())
 			if value.CanFloat() {
-				storage.putGauge(metricName, value.Float())
+				storage.PutGauge(metricName, value.Float())
 			} else if value.CanUint() {
-				storage.putGauge(metricName, float64(value.Uint()))
+				storage.PutGauge(metricName, float64(value.Uint()))
 			}
 		} else {
 			err := errors.New("Metric named " + metricName + " was not found in MemStats")
 			return err
 		}
 	}
-	storage.putCounter("PollCount", 1)
-	storage.putGauge("RandomValue", rand.Float64())
+	storage.PutCounter("PollCount", 1)
+	storage.PutGauge("RandomValue", rand.Float64())
 	return nil
 }
 
-func sendMetrics(storage *memStorage, addr *AddressURL) {
-	storage.sendGauges(addr)
-	storage.sendCounters(addr)
+func sendMetrics(storage *MemStorage.MemStorage, addr *AddressURL.AddressURL) {
+	storage.SendGauges(addr)
+	storage.SendCounters(addr)
 }
 
-func getMetrics(metricType, metricName string, addr *AddressURL) *resty.Response {
+func getMetrics(metricType, metricName string, addr *AddressURL.AddressURL) *resty.Response {
 	client := resty.New()
 	resp, err := client.R().Get(addr.AddrCommand("value", metricType, metricName, "")) //"http://localhost:8080/value/" + metricType + "/" + metricName)
 	if err != nil {
@@ -93,13 +95,13 @@ func main() {
 
 	address, reportInterval, pollInterval := getVars()
 
-	addr := AddressURL{"http", address}
+	addr := AddressURL.AddressURL{Protocol: "http", Address: address}
 
 	metrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
 		"MCacheInuse", "MCacheSys", "MSpanInuse", "MSpanSys", "Mallocs", "NextGC", "NumForcedGC",
 		"NumGC", "OtherSys", "PauseTotalNs", "StackInuse", "StackSys", "Sys", "TotalAlloc"}
-	storage := memStorage{counters: make(map[string]int64), gauges: make(map[string]float64)}
+	storage := MemStorage.NewMemStorage()
 	var m runtime.MemStats
 
 	var wg sync.WaitGroup
@@ -114,7 +116,7 @@ func main() {
 			select {
 			case <-ticker.C:
 				// fmt.Println("Updating metrics")
-				err := updateMetrics(&m, metrics, &storage)
+				err := updateMetrics(&m, metrics, storage)
 				if err != nil {
 					panic(err)
 				}
@@ -133,7 +135,7 @@ func main() {
 			select {
 			case <-ticker.C:
 				// fmt.Println("Sending metrics")
-				sendMetrics(&storage, &addr)
+				sendMetrics(storage, &addr)
 			case <-ctx.Done():
 				return
 			}

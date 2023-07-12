@@ -7,20 +7,20 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/caarlos0/env/v6"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/go-ozzo/ozzo-routing/v2/access"
 	"github.com/go-ozzo/ozzo-routing/v2/fault"
 	"github.com/go-ozzo/ozzo-routing/v2/slash"
+	"github.com/kishenkoilya/metricsalerts/internal/MemStorage"
 )
 
 type Config struct {
 	Address string `env:"ADDRESS"`
 }
 
-func printAllPage(storage *memStorage) routing.Handler {
+func printAllPage(storage *MemStorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		path := strings.Trim(c.Request.URL.Path, "/")
 		if path != "" {
@@ -28,11 +28,11 @@ func printAllPage(storage *memStorage) routing.Handler {
 			return c.Write([]byte(""))
 		}
 		c.Response.WriteHeader(http.StatusOK)
-		return c.Write([]byte(storage.printAll()))
+		return c.Write([]byte(storage.PrintAll()))
 	}
 }
 
-func getPage(storage *memStorage) routing.Handler {
+func getPage(storage *MemStorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		mType := c.Param("mType")
 		mName := c.Param("mName")
@@ -49,7 +49,7 @@ func getPage(storage *memStorage) routing.Handler {
 	}
 }
 
-func updatePage(storage *memStorage) routing.Handler {
+func updatePage(storage *MemStorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		mType := c.Param("mType")
 		mName := c.Param("mName")
@@ -83,34 +83,34 @@ func validateValues(mType, mName string) int {
 	return http.StatusOK
 }
 
-func saveValues(storage *memStorage, mType, mName, mVal string) int {
+func saveValues(storage *MemStorage.MemStorage, mType, mName, mVal string) int {
 	if mType == "counter" {
 		res, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {
 			return http.StatusBadRequest
 		}
-		storage.putCounter(mName, res)
+		storage.PutCounter(mName, res)
 	} else if mType == "gauge" {
 		res, err := strconv.ParseFloat(mVal, 64)
 		if err != nil {
 			return http.StatusBadRequest
 		}
-		storage.putGauge(mName, res)
+		storage.PutGauge(mName, res)
 	}
 	return http.StatusOK
 }
 
-func getValue(storage *memStorage, mType, mName string) (int, string) {
+func getValue(storage *MemStorage.MemStorage, mType, mName string) (int, string) {
 	var res string
 	status := http.StatusOK
 	if mType == "gauge" {
-		gauge, ok := storage.getGauge(mName)
+		gauge, ok := storage.GetGauge(mName)
 		if !ok {
 			return http.StatusNotFound, ""
 		}
 		res = fmt.Sprint(gauge)
 	} else {
-		counter, ok := storage.getCounter(mName)
+		counter, ok := storage.GetCounter(mName)
 		if !ok {
 			return http.StatusNotFound, ""
 		}
@@ -139,7 +139,7 @@ func getVars() string {
 func main() {
 	addr := getVars()
 
-	storage := memStorage{mutex: sync.RWMutex{}, counters: make(map[string]int64), gauges: make(map[string]float64)}
+	storage := MemStorage.NewMemStorage()
 	router := routing.New()
 
 	router.Use(
@@ -148,9 +148,9 @@ func main() {
 		fault.Recovery(log.Printf),
 	)
 
-	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(&storage))
-	router.Get("/value/<mType>/<mName>", getPage(&storage))
-	router.Get("/", printAllPage(&storage))
+	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(storage))
+	router.Get("/value/<mType>/<mName>", getPage(storage))
+	router.Get("/", printAllPage(storage))
 
 	http.Handle("/", router)
 	err := http.ListenAndServe(addr, nil)
