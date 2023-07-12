@@ -14,8 +14,8 @@ import (
 
 	"github.com/caarlos0/env/v6"
 	"github.com/go-resty/resty/v2"
-	"github.com/kishenkoilya/metricsalerts/internal/addressURL"
-	"github.com/kishenkoilya/metricsalerts/internal/memStorage"
+	"github.com/kishenkoilya/metricsalerts/internal/addressurl"
+	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 )
 
 type Config struct {
@@ -24,7 +24,7 @@ type Config struct {
 	PollInterval   int    `env:"POLL_INTERVAL"`
 }
 
-func updateMetrics(m *runtime.MemStats, metrics []string, storage *memStorage.MemStorage) error {
+func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.MemStorage) error {
 	runtime.ReadMemStats(m)
 	for _, metricName := range metrics {
 		value := reflect.ValueOf(*m).FieldByName(metricName)
@@ -45,12 +45,12 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memStorage.Me
 	return nil
 }
 
-func sendMetrics(storage *memStorage.MemStorage, addr *addressURL.AddressURL) {
+func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
 	storage.SendGauges(addr)
 	storage.SendCounters(addr)
 }
 
-func getMetrics(metricType, metricName string, addr *addressURL.AddressURL) *resty.Response {
+func getMetrics(metricType, metricName string, addr *addressurl.AddressURL) *resty.Response {
 	client := resty.New()
 	resp, err := client.R().Get(addr.AddrCommand("value", metricType, metricName, "")) //"http://localhost:8080/value/" + metricType + "/" + metricName)
 	if err != nil {
@@ -95,13 +95,13 @@ func main() {
 
 	address, reportInterval, pollInterval := getVars()
 
-	addr := addressURL.AddressURL{Protocol: "http", Address: address}
+	addr := addressurl.AddressURL{Protocol: "http", Address: address}
 
 	metrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
 		"MCacheInuse", "MCacheSys", "MSpanInuse", "MSpanSys", "Mallocs", "NextGC", "NumForcedGC",
 		"NumGC", "OtherSys", "PauseTotalNs", "StackInuse", "StackSys", "Sys", "TotalAlloc"}
-	storage := memStorage.NewMemStorage()
+	storage := memstorage.NewMemStorage()
 	var m runtime.MemStats
 
 	var wg sync.WaitGroup

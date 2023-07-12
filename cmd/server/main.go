@@ -13,14 +13,14 @@ import (
 	"github.com/go-ozzo/ozzo-routing/v2/access"
 	"github.com/go-ozzo/ozzo-routing/v2/fault"
 	"github.com/go-ozzo/ozzo-routing/v2/slash"
-	"github.com/kishenkoilya/metricsalerts/internal/memStorage"
+	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 )
 
 type Config struct {
 	Address string `env:"ADDRESS"`
 }
 
-func printAllPage(storage *memStorage.MemStorage) routing.Handler {
+func printAllPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		path := strings.Trim(c.Request.URL.Path, "/")
 		if path != "" {
@@ -32,7 +32,7 @@ func printAllPage(storage *memStorage.MemStorage) routing.Handler {
 	}
 }
 
-func getPage(storage *memStorage.MemStorage) routing.Handler {
+func getPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		mType := c.Param("mType")
 		mName := c.Param("mName")
@@ -49,7 +49,7 @@ func getPage(storage *memStorage.MemStorage) routing.Handler {
 	}
 }
 
-func updatePage(storage *memStorage.MemStorage) routing.Handler {
+func updatePage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		mType := c.Param("mType")
 		mName := c.Param("mName")
@@ -83,7 +83,7 @@ func validateValues(mType, mName string) int {
 	return http.StatusOK
 }
 
-func saveValues(storage *memStorage.MemStorage, mType, mName, mVal string) int {
+func saveValues(storage *memstorage.MemStorage, mType, mName, mVal string) int {
 	if mType == "counter" {
 		res, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {
@@ -100,7 +100,7 @@ func saveValues(storage *memStorage.MemStorage, mType, mName, mVal string) int {
 	return http.StatusOK
 }
 
-func getValue(storage *memStorage.MemStorage, mType, mName string) (int, string) {
+func getValue(storage *memstorage.MemStorage, mType, mName string) (int, string) {
 	var res string
 	status := http.StatusOK
 	if mType == "gauge" {
@@ -139,7 +139,7 @@ func getVars() string {
 func main() {
 	addr := getVars()
 
-	storage := memStorage.NewMemStorage()
+	storage := memstorage.NewMemStorage()
 	router := routing.New()
 
 	router.Use(

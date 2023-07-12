@@ -1,11 +1,11 @@
-package memStorage
+package memstorage
 
 import (
 	"fmt"
 	"sync"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/kishenkoilya/metricsalerts/internal/addressURL"
+	"github.com/kishenkoilya/metricsalerts/internal/addressurl"
 )
 
 type MemStorage struct {
@@ -44,7 +44,7 @@ func (m *MemStorage) GetGauge(nameG string) (float64, bool) {
 	return res, ok
 }
 
-func (m *MemStorage) SendGauges(addr *addressURL.AddressURL) {
+func (m *MemStorage) SendGauges(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
 	client := resty.New()
@@ -67,7 +67,7 @@ func (m *MemStorage) SendGauges(addr *addressURL.AddressURL) {
 	m.Mutex.Unlock()
 }
 
-func (m *MemStorage) SendCounters(addr *addressURL.AddressURL) {
+func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
 	client := resty.New()

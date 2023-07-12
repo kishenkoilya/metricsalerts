@@ -5,14 +5,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/kishenkoilya/metricsalerts/internal/memStorage"
+	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 )
 
 func Test_updateMetrics(t *testing.T) {
 	type args struct {
 		m            *runtime.MemStats
 		gaugeMetrics []string
-		storage      *memStorage.MemStorage
+		storage      *memstorage.MemStorage
 	}
 	tests := []struct {
 		name string
@@ -23,7 +23,7 @@ func Test_updateMetrics(t *testing.T) {
 			args: args{
 				m:            new(runtime.MemStats),
 				gaugeMetrics: []string{"Alloc", "Frees", "Sys", "GCCPUFraction"},
-				storage:      &memStorage.MemStorage{Mutex: sync.RWMutex{}, Counters: make(map[string]int64), Gauges: make(map[string]float64)},
+				storage:      &memstorage.MemStorage{Mutex: sync.RWMutex{}, Counters: make(map[string]int64), Gauges: make(map[string]float64)},
 			},
 		},
 	}
