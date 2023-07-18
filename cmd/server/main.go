@@ -59,7 +59,7 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 
 		statusRes, err := validateValues(mType, mName)
 		if err == nil {
-			statusRes = saveValues(storage, mType, mName, mVal)
+			statusRes = saveValue(storage, mType, mName, mVal)
 		} else {
 			body = err.Error()
 		}
@@ -84,7 +84,7 @@ func validateValues(mType, mName string) (int, error) {
 	return http.StatusOK, nil
 }
 
-func saveValues(storage *memstorage.MemStorage, mType, mName, mVal string) int {
+func saveValue(storage *memstorage.MemStorage, mType, mName, mVal string) int {
 	if mType == "counter" {
 		res, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {

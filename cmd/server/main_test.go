@@ -68,7 +68,7 @@ func Test_validateValues(t *testing.T) {
 	}
 }
 
-func Test_saveValues(t *testing.T) {
+func Test_saveValue(t *testing.T) {
 	type args struct {
 		storage *memstorage.MemStorage
 		mType   string
@@ -123,7 +123,7 @@ func Test_saveValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := saveValues(tt.args.storage, tt.args.mType, tt.args.mName, tt.args.mVal); got != tt.want {
+			if got := saveValue(tt.args.storage, tt.args.mType, tt.args.mName, tt.args.mVal); got != tt.want {
 				t.Errorf("saveValues() = %v, want %v", got, tt.want)
 			}
 		})

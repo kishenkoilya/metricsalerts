@@ -93,11 +93,17 @@ func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 func (m *MemStorage) PrintAll() string {
 	m.Mutex.Lock()
 	res := ""
+	if len(m.Counters) > 0 {
+		res += "Counters:\n"
+	}
 	for k, v := range m.Counters {
-		res += k + ": " + fmt.Sprint(v)
+		res += k + ": " + fmt.Sprint(v) + "\n"
+	}
+	if len(m.Counters) > 0 {
+		res += "Gauges:\n"
 	}
 	for k, v := range m.Gauges {
-		res += k + ": " + fmt.Sprint(v)
+		res += k + ": " + fmt.Sprint(v) + "\n"
 	}
 	m.Mutex.Unlock()
 	return res
