@@ -64,9 +64,6 @@ func getVars() (string, int, int) {
 	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
 	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
 	flag.Parse()
-	fmt.Println(*address)
-	fmt.Println(*reportInterval)
-	fmt.Println(*pollInterval)
 
 	var cfg Config
 	error := env.Parse(&cfg)
@@ -82,9 +79,6 @@ func getVars() (string, int, int) {
 	if cfg.PollInterval != 0 {
 		pollInterval = &cfg.PollInterval
 	}
-	fmt.Println(*address)
-	fmt.Println(*reportInterval)
-	fmt.Println(*pollInterval)
 	return *address, *reportInterval, *pollInterval
 }
 

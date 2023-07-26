@@ -8,17 +8,60 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/caarlos0/env/v6"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
-	"github.com/go-ozzo/ozzo-routing/v2/access"
 	"github.com/go-ozzo/ozzo-routing/v2/fault"
 	"github.com/go-ozzo/ozzo-routing/v2/slash"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
+	"go.uber.org/zap"
 )
+
+var sugar zap.SugaredLogger
 
 type Config struct {
 	Address string `env:"ADDRESS"`
+}
+
+func LoggingMiddleware() routing.Handler {
+	return func(c *routing.Context) error {
+		start := time.Now()
+		uri := c.Request.RequestURI
+		method := c.Request.Method
+		rw := &LogResponseWriter{c.Response, http.StatusOK, 0}
+		c.Response = rw
+
+		err := c.Next()
+
+		duration := time.Since(start)
+		sugar.Infoln(
+			"uri", uri,
+			"method", method,
+			"status", rw.Status,
+			"duration", duration,
+			"size", rw.BytesWritten,
+		)
+
+		return err
+	}
+}
+
+type LogResponseWriter struct {
+	http.ResponseWriter
+	Status       int
+	BytesWritten int64
+}
+
+func (r *LogResponseWriter) Write(p []byte) (int, error) {
+	written, err := r.ResponseWriter.Write(p)
+	r.BytesWritten += int64(written)
+	return written, err
+}
+
+func (r *LogResponseWriter) WriteHeader(status int) {
+	r.Status = status
+	r.ResponseWriter.WriteHeader(status)
 }
 
 func printAllPage(storage *memstorage.MemStorage) routing.Handler {
@@ -123,7 +166,6 @@ func getValue(storage *memstorage.MemStorage, mType, mName string) (int, string)
 func getVars() string {
 	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
 	flag.Parse()
-	fmt.Println(*addr)
 
 	var cfg Config
 	error := env.Parse(&cfg)
@@ -133,18 +175,28 @@ func getVars() string {
 	if cfg.Address != "" {
 		addr = &cfg.Address
 	}
-	fmt.Println(*addr)
 	return *addr
 }
 
 func main() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		// вызываем панику, если ошибка
+		panic(err)
+	}
+	defer logger.Sync()
+
+	// делаем регистратор SugaredLogger
+	sugar = *logger.Sugar()
+
 	addr := getVars()
 
 	storage := memstorage.NewMemStorage()
 	router := routing.New()
 
 	router.Use(
-		access.Logger(log.Printf),
+		LoggingMiddleware(),
+		// access.Logger(log.Printf),
 		slash.Remover(http.StatusMovedPermanently),
 		fault.Recovery(log.Printf),
 	)
@@ -154,8 +206,14 @@ func main() {
 	router.Get("/", printAllPage(storage))
 
 	http.Handle("/", router)
-	err := http.ListenAndServe(addr, nil)
+
+	sugar.Infow(
+		"Starting server",
+		"addr", addr,
+	)
+
+	err = http.ListenAndServe(addr, nil)
 	if err != nil {
-		panic(err)
+		sugar.Fatalw(err.Error(), "event", "start server")
 	}
 }
