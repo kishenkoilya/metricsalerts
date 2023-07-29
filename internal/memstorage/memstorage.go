@@ -120,7 +120,7 @@ func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 	m.Mutex.Unlock()
 }
 
-func (m *MemStorage) SendJsonGauges(addr *addressurl.AddressURL) {
+func (m *MemStorage) SendJSONGauges(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
 	client := resty.New()
@@ -152,7 +152,7 @@ func (m *MemStorage) SendJsonGauges(addr *addressurl.AddressURL) {
 	m.Mutex.Unlock()
 }
 
-func (m *MemStorage) SendJsonCounters(addr *addressurl.AddressURL) {
+func (m *MemStorage) SendJSONCounters(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
 	client := resty.New()
