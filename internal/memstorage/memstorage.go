@@ -24,8 +24,8 @@ type Metrics struct {
 
 func (m *MemStorage) GetMetrics(mType, mName string) (int, *Metrics) {
 	var res Metrics
-	res.ID = mType
-	res.MType = mName
+	res.ID = mName
+	res.MType = mType
 	if mType == "gauge" {
 		val, ok := m.GetGauge(mName)
 		if ok {

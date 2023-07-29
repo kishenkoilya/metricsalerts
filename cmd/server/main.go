@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -36,18 +35,12 @@ func LoggingMiddleware() routing.Handler {
 		err := c.Next()
 
 		duration := time.Since(start)
-		body, err := ioutil.ReadAll(c.Request.Body)
-		if err != nil {
-			return err
-		}
-		defer c.Request.Body.Close()
 		sugar.Infoln(
 			"uri", uri,
 			"method", method,
 			"status", rw.Status,
 			"duration", duration,
 			"size", rw.BytesWritten,
-			"body", string(body),
 		)
 
 		return err
