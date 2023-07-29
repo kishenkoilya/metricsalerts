@@ -14,7 +14,6 @@ import (
 	"github.com/caarlos0/env/v6"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
 	"github.com/go-ozzo/ozzo-routing/v2/fault"
-	"github.com/go-ozzo/ozzo-routing/v2/slash"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 	"go.uber.org/zap"
 )
@@ -134,7 +133,6 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 
 func updatePage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
-		println(fmt.Sprint(c.Request.Header))
 		mType := c.Param("mType")
 		mName := c.Param("mName")
 		mVal := c.Param("mVal")
@@ -177,7 +175,8 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 				body = err.Error()
 			}
 
-			statusRes, resp := storage.GetMetrics(mType, mName)
+			var resp *memstorage.Metrics
+			statusRes, resp = storage.GetMetrics(mType, mName)
 			respJSON, err := json.Marshal(resp)
 			if err != nil {
 				statusRes = http.StatusInternalServerError
@@ -282,7 +281,7 @@ func main() {
 	router.Use(
 		LoggingMiddleware(),
 		// access.Logger(log.Printf),
-		slash.Remover(http.StatusMovedPermanently),
+		// slash.Remover(http.StatusMovedPermanently),
 		fault.Recovery(log.Printf),
 	)
 
