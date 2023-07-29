@@ -171,10 +171,11 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			statusRes, err = validateValues(mType, mName)
 			if err == nil {
 				statusRes = saveValue(storage, mType, mName, mVal)
+				c.Response.WriteHeader(statusRes)
 			} else {
 				body = err.Error()
 			}
-
+			c.Response.WriteHeader(statusRes)
 			var resp *memstorage.Metrics
 			statusRes, resp = storage.GetMetrics(mType, mName)
 			respJSON, err := json.Marshal(resp)
