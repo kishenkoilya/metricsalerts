@@ -5,6 +5,10 @@ type AddressURL struct {
 	Address  string
 }
 
+func (addr *AddressURL) AddrEmpty() string {
+	return addr.Protocol + "://" + addr.Address + "/"
+}
+
 func (addr *AddressURL) AddrCommand(command, metricType, metricName, value string) string {
 	if metricType == "" {
 		return addr.Protocol + "://" + addr.Address + "/" + command

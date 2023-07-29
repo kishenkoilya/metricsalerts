@@ -170,18 +170,14 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			} else {
 				mVal = fmt.Sprint(*req.Value)
 			}
-			fmt.Println(mVal)
 			statusRes, err = validateValues(mType, mName)
 			if err == nil {
-				fmt.Println(statusRes)
 				statusRes = saveValue(storage, mType, mName, mVal)
 			} else {
 				body = err.Error()
 			}
 
-			fmt.Println(statusRes)
 			statusRes, resp := storage.GetMetrics(mType, mName)
-			fmt.Println(statusRes)
 			respJSON, err := json.Marshal(resp)
 			if err != nil {
 				statusRes = http.StatusInternalServerError
@@ -290,8 +286,8 @@ func main() {
 		fault.Recovery(log.Printf),
 	)
 
-	router.Post("/update", updateJSONPage(storage))
-	router.Post("/value", getJSONPage(storage))
+	router.Post("/update/", updateJSONPage(storage))
+	router.Post("/value/", getJSONPage(storage))
 	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(storage))
 	router.Get("/value/<mType>/<mName>", getPage(storage))
 	router.Get("/", printAllPage(storage))

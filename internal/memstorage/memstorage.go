@@ -186,6 +186,7 @@ func (m *MemStorage) SendJSONCounters(addr *addressurl.AddressURL) {
 
 func (m *MemStorage) PrintAll() string {
 	m.Mutex.Lock()
+	fmt.Println("Getting all vals")
 	res := ""
 	if len(m.Counters) > 0 {
 		res += "Counters:\n"

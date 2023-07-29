@@ -61,6 +61,15 @@ func getMetrics(metricType, metricName string, addr *addressurl.AddressURL) *res
 	return resp
 }
 
+func getAllMetrics(addr *addressurl.AddressURL) *resty.Response {
+	client := resty.New()
+	resp, err := client.R().Get(addr.AddrEmpty())
+	if err != nil {
+		fmt.Println(err)
+	}
+	return resp
+}
+
 func getVars() (string, int, int) {
 	address := flag.String("a", "localhost:8080", "An address the server will listen to")
 	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
@@ -132,6 +141,8 @@ func main() {
 			case <-ticker.C:
 				// fmt.Println("Sending metrics")
 				sendMetrics(storage, &addr)
+				resp := getAllMetrics(&addr)
+				fmt.Println(string(resp.Body()))
 			case <-ctx.Done():
 				return
 			}
