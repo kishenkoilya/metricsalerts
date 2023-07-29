@@ -95,38 +95,33 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 
 func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
-		if c.Request.Header.Get("Content-Type") == "application/json" {
-			var statusRes int
-			var body string
-			var req memstorage.Metrics
-			err := json.NewDecoder(c.Request.Body).Decode(&req)
-			if err != nil {
-				statusRes = http.StatusBadRequest
-				body = err.Error()
-			}
+		var statusRes int
+		var body string
+		var req memstorage.Metrics
+		err := json.NewDecoder(c.Request.Body).Decode(&req)
+		if err != nil {
+			statusRes = http.StatusBadRequest
+			body = err.Error()
+		}
 
-			statusRes, err = validateValues(req.MType, req.ID)
-			resp := &memstorage.Metrics{}
-			if err == nil {
-				statusRes, resp = storage.GetMetrics(req.MType, req.ID)
-			} else {
-				body = err.Error()
-			}
-
-			respJSON, err := json.Marshal(resp)
-			if err != nil {
-				statusRes = http.StatusInternalServerError
-				body = err.Error()
-			}
-			c.Response.WriteHeader(statusRes)
-			if err == nil {
-				return c.Write(respJSON)
-			} else {
-				return c.Write([]byte(body))
-			}
+		statusRes, err = validateValues(req.MType, req.ID)
+		resp := &memstorage.Metrics{}
+		if err == nil {
+			statusRes, resp = storage.GetMetrics(req.MType, req.ID)
 		} else {
-			c.Response.WriteHeader(http.StatusBadRequest)
-			return c.Write([]byte(""))
+			body = err.Error()
+		}
+
+		respJSON, err := json.Marshal(resp)
+		if err != nil {
+			statusRes = http.StatusInternalServerError
+			body = err.Error()
+		}
+		c.Response.WriteHeader(statusRes)
+		if err == nil {
+			return c.Write(respJSON)
+		} else {
+			return c.Write([]byte(body))
 		}
 	}
 }
@@ -151,47 +146,42 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 
 func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
-		if c.Request.Header.Get("Content-Type") == "application/json" {
-			var statusRes int
-			var body string
-			var req memstorage.Metrics
-			err := json.NewDecoder(c.Request.Body).Decode(&req)
-			if err != nil {
-				statusRes = http.StatusBadRequest
-				body = err.Error()
-			}
-			mType := req.MType
-			mName := req.ID
-			var mVal string
-			if req.Delta != nil {
-				mVal = fmt.Sprint(*req.Delta)
-			} else {
-				mVal = fmt.Sprint(*req.Value)
-			}
-			statusRes, err = validateValues(mType, mName)
-			if err == nil {
-				statusRes = saveValue(storage, mType, mName, mVal)
-				c.Response.WriteHeader(statusRes)
-			} else {
-				body = err.Error()
-			}
-			c.Response.WriteHeader(statusRes)
-			var resp *memstorage.Metrics
-			statusRes, resp = storage.GetMetrics(mType, mName)
-			respJSON, err := json.Marshal(resp)
-			if err != nil {
-				statusRes = http.StatusInternalServerError
-				body = err.Error()
-			}
-			c.Response.WriteHeader(statusRes)
-			if err == nil {
-				return c.Write(respJSON)
-			} else {
-				return c.Write([]byte(body))
-			}
+		var statusRes int
+		var body string
+		var req memstorage.Metrics
+		err := json.NewDecoder(c.Request.Body).Decode(&req)
+		if err != nil {
+			statusRes = http.StatusBadRequest
+			body = err.Error()
+		}
+		mType := req.MType
+		mName := req.ID
+		var mVal string
+		if req.Delta != nil {
+			mVal = fmt.Sprint(*req.Delta)
 		} else {
-			c.Response.WriteHeader(http.StatusBadRequest)
-			return c.Write([]byte(""))
+			mVal = fmt.Sprint(*req.Value)
+		}
+		statusRes, err = validateValues(mType, mName)
+		if err == nil {
+			statusRes = saveValue(storage, mType, mName, mVal)
+			c.Response.WriteHeader(statusRes)
+		} else {
+			body = err.Error()
+		}
+		c.Response.WriteHeader(statusRes)
+		var resp *memstorage.Metrics
+		statusRes, resp = storage.GetMetrics(mType, mName)
+		respJSON, err := json.Marshal(resp)
+		if err != nil {
+			statusRes = http.StatusInternalServerError
+			body = err.Error()
+		}
+		c.Response.WriteHeader(statusRes)
+		if err == nil {
+			return c.Write(respJSON)
+		} else {
+			return c.Write([]byte(body))
 		}
 	}
 }
