@@ -46,13 +46,15 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 }
 
 func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
-	storage.SendGauges(addr)
-	storage.SendCounters(addr)
+	storage.SendJsonGauges(addr)
+	storage.SendJsonCounters(addr)
+	// storage.SendGauges(addr)
+	// storage.SendCounters(addr)
 }
 
 func getMetrics(metricType, metricName string, addr *addressurl.AddressURL) *resty.Response {
 	client := resty.New()
-	resp, err := client.R().Get(addr.AddrCommand("value", metricType, metricName, "")) //"http://localhost:8080/value/" + metricType + "/" + metricName)
+	resp, err := client.R().Get(addr.AddrCommand("value", metricType, metricName, ""))
 	if err != nil {
 		fmt.Println(err)
 	}

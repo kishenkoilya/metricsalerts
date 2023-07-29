@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -93,8 +94,47 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 	}
 }
 
+func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
+	return func(c *routing.Context) error {
+		if c.Request.Header.Get("Content-Type") == "application/json" {
+			var statusRes int
+			var body string
+			var req memstorage.Metrics
+			err := json.NewDecoder(c.Request.Body).Decode(&req)
+			if err != nil {
+				statusRes = http.StatusBadRequest
+				body = err.Error()
+			}
+
+			statusRes, err = validateValues(req.MType, req.ID)
+			resp := &memstorage.Metrics{}
+			if err == nil {
+				statusRes, resp = storage.GetMetrics(req.MType, req.ID)
+			} else {
+				body = err.Error()
+			}
+
+			respJSON, err := json.Marshal(resp)
+			if err != nil {
+				statusRes = http.StatusInternalServerError
+				body = err.Error()
+			}
+			c.Response.WriteHeader(statusRes)
+			if err == nil {
+				return c.Write(respJSON)
+			} else {
+				return c.Write([]byte(body))
+			}
+		} else {
+			c.Response.WriteHeader(http.StatusBadRequest)
+			return c.Write([]byte(""))
+		}
+	}
+}
+
 func updatePage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
+		println(fmt.Sprint(c.Request.Header))
 		mType := c.Param("mType")
 		mName := c.Param("mName")
 		mVal := c.Param("mVal")
@@ -108,6 +148,55 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 		}
 		c.Response.WriteHeader(statusRes)
 		return c.Write([]byte(body))
+	}
+}
+
+func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
+	return func(c *routing.Context) error {
+		if c.Request.Header.Get("Content-Type") == "application/json" {
+			var statusRes int
+			var body string
+			var req memstorage.Metrics
+			err := json.NewDecoder(c.Request.Body).Decode(&req)
+			if err != nil {
+				statusRes = http.StatusBadRequest
+				body = err.Error()
+			}
+			mType := req.MType
+			mName := req.ID
+			var mVal string
+			if req.Delta != nil {
+				mVal = fmt.Sprint(*req.Delta)
+			} else {
+				mVal = fmt.Sprint(*req.Value)
+			}
+			fmt.Println(mVal)
+			statusRes, err = validateValues(mType, mName)
+			if err == nil {
+				fmt.Println(statusRes)
+				statusRes = saveValue(storage, mType, mName, mVal)
+			} else {
+				body = err.Error()
+			}
+
+			fmt.Println(statusRes)
+			statusRes, resp := storage.GetMetrics(mType, mName)
+			fmt.Println(statusRes)
+			respJSON, err := json.Marshal(resp)
+			if err != nil {
+				statusRes = http.StatusInternalServerError
+				body = err.Error()
+			}
+			c.Response.WriteHeader(statusRes)
+			if err == nil {
+				return c.Write(respJSON)
+			} else {
+				return c.Write([]byte(body))
+			}
+		} else {
+			c.Response.WriteHeader(http.StatusBadRequest)
+			return c.Write([]byte(""))
+		}
 	}
 }
 
@@ -201,6 +290,8 @@ func main() {
 		fault.Recovery(log.Printf),
 	)
 
+	router.Post("/update", updateJSONPage(storage))
+	router.Post("/value", getJSONPage(storage))
 	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(storage))
 	router.Get("/value/<mType>/<mName>", getPage(storage))
 	router.Get("/", printAllPage(storage))
