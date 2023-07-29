@@ -41,6 +41,7 @@ func LoggingMiddleware() routing.Handler {
 			"status", rw.Status,
 			"duration", duration,
 			"size", rw.BytesWritten,
+			// "Content-Type", c.Request.Header.Get("Content-Type"),
 		)
 
 		return err
@@ -98,6 +99,7 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		var statusRes int
 		var body string
 		var req memstorage.Metrics
+		c.Response.Header().Set("Content-Type", "application/json")
 		err := json.NewDecoder(c.Request.Body).Decode(&req)
 		if err != nil {
 			statusRes = http.StatusBadRequest
@@ -149,6 +151,7 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		var statusRes int
 		var body string
 		var req memstorage.Metrics
+		c.Response.Header().Set("Content-Type", "application/json")
 		err := json.NewDecoder(c.Request.Body).Decode(&req)
 		if err != nil {
 			statusRes = http.StatusBadRequest

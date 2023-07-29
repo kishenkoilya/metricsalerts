@@ -91,6 +91,7 @@ func (m *MemStorage) SendGauges(addr *addressurl.AddressURL) {
 				}
 				fmt.Print("\n")
 			}
+			fmt.Println(string(resp.Body()))
 		}
 	}
 
@@ -114,6 +115,7 @@ func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 				}
 				fmt.Print("\n")
 			}
+			fmt.Println(string(resp.Body()))
 		}
 	}
 
@@ -146,6 +148,7 @@ func (m *MemStorage) SendJSONGauges(addr *addressurl.AddressURL) {
 				}
 				fmt.Print("\n")
 			}
+			fmt.Println(string(resp.Body()))
 		}
 	}
 
@@ -178,6 +181,7 @@ func (m *MemStorage) SendJSONCounters(addr *addressurl.AddressURL) {
 				}
 				fmt.Print("\n")
 			}
+			fmt.Println(string(resp.Body()))
 		}
 	}
 
