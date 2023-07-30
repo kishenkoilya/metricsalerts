@@ -156,6 +156,7 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			statusRes = http.StatusBadRequest
 			body = err.Error()
 		}
+		req.PrintMetrics()
 		mType := req.MType
 		mName := req.ID
 		var mVal string

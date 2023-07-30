@@ -22,6 +22,14 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
 }
 
+func (m *Metrics) PrintMetrics() {
+	if m.Delta != nil {
+		fmt.Println("ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(*m.Delta) + "; Value:" + fmt.Sprint(m.Value))
+	} else {
+		fmt.Println("ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(m.Delta) + "; Value:" + fmt.Sprint(*m.Value))
+	}
+}
+
 func (m *MemStorage) GetMetrics(mType, mName string) (int, *Metrics) {
 	var res Metrics
 	res.ID = mName
