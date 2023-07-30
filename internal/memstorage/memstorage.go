@@ -91,7 +91,7 @@ func (m *MemStorage) SendGauges(addr *addressurl.AddressURL) {
 	for metric, value := range m.Gauges {
 		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
@@ -115,7 +115,7 @@ func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 	for metric, value := range m.Counters {
 		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
@@ -148,7 +148,7 @@ func (m *MemStorage) SendJSONGauges(addr *addressurl.AddressURL) {
 
 		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
@@ -181,7 +181,7 @@ func (m *MemStorage) SendJSONCounters(addr *addressurl.AddressURL) {
 
 		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
