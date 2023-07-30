@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -95,6 +96,11 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 
 func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
+		b, er := io.ReadAll(c.Request.Body)
+		if er != nil {
+			return er
+		}
+		sugar.Errorln(string(b))
 		var statusRes int
 		var body string
 		var req memstorage.Metrics
