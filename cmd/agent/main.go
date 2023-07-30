@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/go-resty/resty/v2"
@@ -109,83 +107,83 @@ func getVars() (string, int, int) {
 func main() {
 	// ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	// defer cancel()
-	ctx := context.Background()
+	// ctx := context.Background()
 
-	address, reportInterval, pollInterval := getVars()
+	// _, _, pollInterval := getVars()
 
-	addr := addressurl.AddressURL{Protocol: "http", Address: address}
+	// // addr := addressurl.AddressURL{Protocol: "http", Address: address}
 
-	metrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
-		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
-		"MCacheInuse", "MCacheSys", "MSpanInuse", "MSpanSys", "Mallocs", "NextGC", "NumForcedGC",
-		"NumGC", "OtherSys", "PauseTotalNs", "StackInuse", "StackSys", "Sys", "TotalAlloc"}
-	storage := memstorage.NewMemStorage()
-	var m runtime.MemStats
+	// metrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
+	// 	"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
+	// 	"MCacheInuse", "MCacheSys", "MSpanInuse", "MSpanSys", "Mallocs", "NextGC", "NumForcedGC",
+	// 	"NumGC", "OtherSys", "PauseTotalNs", "StackInuse", "StackSys", "Sys", "TotalAlloc"}
+	// storage := memstorage.NewMemStorage()
+	// var m runtime.MemStats
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
-		defer ticker.Stop()
+	// go func() {
+	// 	defer wg.Done()
+	// 	ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+	// 	defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				// fmt.Println("Updating metrics")
-				err := updateMetrics(&m, metrics, storage)
-				if err != nil {
-					panic(err)
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	// 	for {
+	// 		select {
+	// 		case <-ticker.C:
+	// 			// fmt.Println("Updating metrics")
+	// 			err := updateMetrics(&m, metrics, storage)
+	// 			if err != nil {
+	// 				panic(err)
+	// 			}
+	// 		case <-ctx.Done():
+	// 			return
+	// 		}
+	// 	}
+	// }()
 
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(reportInterval) * time.Second)
-		defer ticker.Stop()
+	// go func() {
+	// 	defer wg.Done()
+	// 	ticker := time.NewTicker(time.Duration(reportInterval) * time.Second)
+	// 	defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				// fmt.Println("Sending metrics")
-				sendMetrics(storage, &addr)
-				resp := getAllMetrics(&addr)
-				fmt.Println(string(resp.Body()))
+	// 	for {
+	// 		select {
+	// 		case <-ticker.C:
+	// 			// fmt.Println("Sending metrics")
+	// 			sendMetrics(storage, &addr)
+	// 			resp := getAllMetrics(&addr)
+	// 			fmt.Println(string(resp.Body()))
 
-				for k := range storage.Gauges {
-					response := getJSONMetrics("gauge", k, &addr)
-					fmt.Println(response.Proto() + " " + response.Status())
-					for k, v := range response.Header() {
-						fmt.Print(k + ": ")
-						for _, s := range v {
-							fmt.Print(fmt.Sprint(s))
-						}
-						fmt.Print("\n")
-					}
-					fmt.Println(string(response.Body()))
-				}
-				for k := range storage.Counters {
-					response := getJSONMetrics("counter", k, &addr)
-					fmt.Println(response.Proto() + " " + response.Status())
-					for k, v := range response.Header() {
-						fmt.Print(k + ": ")
-						for _, s := range v {
-							fmt.Print(fmt.Sprint(s))
-						}
-						fmt.Print("\n")
-					}
-					fmt.Println(string(response.Body()))
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	// 			for k := range storage.Gauges {
+	// 				response := getJSONMetrics("gauge", k, &addr)
+	// 				fmt.Println(response.Proto() + " " + response.Status())
+	// 				for k, v := range response.Header() {
+	// 					fmt.Print(k + ": ")
+	// 					for _, s := range v {
+	// 						fmt.Print(fmt.Sprint(s))
+	// 					}
+	// 					fmt.Print("\n")
+	// 				}
+	// 				fmt.Println(string(response.Body()))
+	// 			}
+	// 			for k := range storage.Counters {
+	// 				response := getJSONMetrics("counter", k, &addr)
+	// 				fmt.Println(response.Proto() + " " + response.Status())
+	// 				for k, v := range response.Header() {
+	// 					fmt.Print(k + ": ")
+	// 					for _, s := range v {
+	// 						fmt.Print(fmt.Sprint(s))
+	// 					}
+	// 					fmt.Print("\n")
+	// 				}
+	// 				fmt.Println(string(response.Body()))
+	// 			}
+	// 		case <-ctx.Done():
+	// 			return
+	// 		}
+	// 	}
+	// }()
 
 	// cancel()
 
