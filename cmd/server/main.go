@@ -149,7 +149,7 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		var statusRes int
 		var body string
-		var req memstorage.Metrics
+		var req *memstorage.Metrics
 		c.Response.Header().Set("Content-Type", "application/json")
 		err := json.NewDecoder(c.Request.Body).Decode(&req)
 		if err != nil {
@@ -159,23 +159,15 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		req.PrintMetrics()
 		mType := req.MType
 		mName := req.ID
-		var mVal string
-		if req.Delta != nil {
-			mVal = fmt.Sprint(*req.Delta)
-		} else {
-			mVal = fmt.Sprint(*req.Value)
-		}
 		statusRes, err = validateValues(mType, mName)
 		if err == nil {
-			statusRes = saveValue(storage, mType, mName, mVal)
+			statusRes, req = storage.SaveMetrics(req)
 			c.Response.WriteHeader(statusRes)
 		} else {
 			body = err.Error()
 		}
-		c.Response.WriteHeader(statusRes)
-		var resp *memstorage.Metrics
-		statusRes, resp = storage.GetMetrics(mType, mName)
-		respJSON, err := json.Marshal(resp)
+
+		respJSON, err := json.Marshal(req)
 		if err != nil {
 			statusRes = http.StatusInternalServerError
 			body = err.Error()

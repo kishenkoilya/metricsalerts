@@ -30,6 +30,25 @@ func (m *Metrics) PrintMetrics() {
 	}
 }
 
+func (m *MemStorage) SaveMetrics(metric *Metrics) (int, *Metrics) {
+	if metric.MType == "gauge" {
+		m.PutGauge(metric.ID, *metric.Value)
+		val, ok := m.GetGauge(metric.ID)
+		if ok {
+			*metric.Value = val
+		}
+	} else if metric.MType == "counter" {
+		m.PutCounter(metric.ID, *metric.Delta)
+		val, ok := m.GetCounter(metric.ID)
+		if ok {
+			*metric.Delta = val
+		}
+	} else {
+		return http.StatusBadRequest, metric
+	}
+	return http.StatusOK, metric
+}
+
 func (m *MemStorage) GetMetrics(mType, mName string) (int, *Metrics) {
 	var res Metrics
 	res.ID = mName
@@ -91,7 +110,7 @@ func (m *MemStorage) SendGauges(addr *addressurl.AddressURL) {
 	for metric, value := range m.Gauges {
 		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("SendGauges error: " + fmt.Sprint(err))
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
@@ -113,9 +132,9 @@ func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 
 	client := resty.New()
 	for metric, value := range m.Counters {
-		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
+		resp, err := client.R().Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("SendCounters error: " + fmt.Sprint(err))
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
@@ -148,7 +167,7 @@ func (m *MemStorage) SendJSONGauges(addr *addressurl.AddressURL) {
 
 		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("SendJSONGauges error: " + fmt.Sprint(err))
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
@@ -181,7 +200,7 @@ func (m *MemStorage) SendJSONCounters(addr *addressurl.AddressURL) {
 
 		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("SendJSONCounters error: " + fmt.Sprint(err))
 		} else {
 			fmt.Println(resp.Proto() + " " + resp.Status())
 			for k, v := range resp.Header() {
