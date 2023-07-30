@@ -52,9 +52,22 @@ func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
 	storage.SendCounters(addr)
 }
 
-func getMetrics(metricType, metricName string, addr *addressurl.AddressURL) *resty.Response {
+func getMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Response {
 	client := resty.New()
-	resp, err := client.R().Get(addr.AddrCommand("value", metricType, metricName, ""))
+	resp, err := client.R().Get(addr.AddrCommand("value", mType, mName, ""))
+	if err != nil {
+		fmt.Println(err)
+	}
+	return resp
+}
+
+func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Response {
+	client := resty.New()
+	reqBody := memstorage.Metrics{ID: mName, MType: mType}
+	request := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(reqBody)
+	resp, err := request.Post(addr.AddrCommand("value", "", "", ""))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -143,6 +156,31 @@ func main() {
 				sendMetrics(storage, &addr)
 				resp := getAllMetrics(&addr)
 				fmt.Println(string(resp.Body()))
+
+				for k := range storage.Gauges {
+					response := getJSONMetrics("gauge", k, &addr)
+					fmt.Println(response.Proto() + " " + response.Status())
+					for k, v := range response.Header() {
+						fmt.Print(k + ": ")
+						for _, s := range v {
+							fmt.Print(fmt.Sprint(s))
+						}
+						fmt.Print("\n")
+					}
+					fmt.Println(string(response.Body()))
+				}
+				for k := range storage.Counters {
+					response := getJSONMetrics("counter", k, &addr)
+					fmt.Println(response.Proto() + " " + response.Status())
+					for k, v := range response.Header() {
+						fmt.Print(k + ": ")
+						for _, s := range v {
+							fmt.Print(fmt.Sprint(s))
+						}
+						fmt.Print("\n")
+					}
+					fmt.Println(string(response.Body()))
+				}
 			case <-ctx.Done():
 				return
 			}
