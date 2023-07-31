@@ -68,8 +68,7 @@ func (r *LogResponseWriter) WriteHeader(status int) {
 
 func GzipHandle() routing.Handler {
 	return func(c *routing.Context) error {
-		sugar.Infoln(c.Request.Header.Get("Accept-Encoding"))
-		if !strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+		if !strings.Contains(c.Request.Header.Get("Content-Encoding"), "gzip") {
 			return c.Next()
 		}
 		gzippedBuf := new(strings.Builder)

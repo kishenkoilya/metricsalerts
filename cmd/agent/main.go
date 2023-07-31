@@ -209,18 +209,18 @@ func main() {
 				// 	}
 				// 	fmt.Println(string(response.Body()))
 				// }
-				for k := range storage.Counters {
-					response := getJSONMetrics("counter", k, &addr, false)
-					fmt.Println("response proto: " + response.Proto() + " " + response.Status())
-					// for k, v := range response.Header() {
-					// 	fmt.Print(k + ": ")
-					// 	for _, s := range v {
-					// 		fmt.Print(fmt.Sprint(s))
-					// 	}
-					// 	fmt.Print("\n")
-					// }
-					// fmt.Println(string(response.Body()))
-				}
+				// for k := range storage.Counters {
+				// 	response := getJSONMetrics("counter", k, &addr, false)
+				// 	fmt.Println("response proto: " + response.Proto() + " " + response.Status())
+				// 	for k, v := range response.Header() {
+				// 		fmt.Print(k + ": ")
+				// 		for _, s := range v {
+				// 			fmt.Print(fmt.Sprint(s))
+				// 		}
+				// 		fmt.Print("\n")
+				// 	}
+				// 	fmt.Println(string(response.Body()))
+				// }
 			case <-ctx.Done():
 				return
 			}
