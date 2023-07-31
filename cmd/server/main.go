@@ -43,6 +43,7 @@ func LoggingMiddleware() routing.Handler {
 			"status", rw.Status,
 			"duration", duration,
 			"size", rw.BytesWritten,
+			"Accept-Encoding", c.Request.Header.Get("Accept-Encoding"),
 		)
 
 		return err
@@ -334,7 +335,7 @@ func main() {
 		"addr", addr,
 	)
 
-	err = http.ListenAndServe(addr, nil)
+	err = http.ListenAndServe(addr, router)
 	if err != nil {
 		sugar.Fatalw(err.Error(), "event", "start server")
 	}
