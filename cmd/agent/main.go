@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -46,13 +49,13 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 }
 
 func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
-	// storage.SendJSONGauges(addr)
-	// storage.SendJSONCounters(addr)
-	storage.SendGauges(addr)
-	storage.SendCounters(addr)
+	storage.SendJSONGauges(addr)
+	storage.SendJSONCounters(addr)
+	// storage.SendGauges(addr)
+	// storage.SendCounters(addr)
 }
 
-func getMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Response {
+func getMetric(mType, mName string, addr *addressurl.AddressURL) *resty.Response {
 	client := resty.New()
 	resp, err := client.R().Get(addr.AddrCommand("value", mType, mName, ""))
 	if err != nil {
@@ -64,9 +67,25 @@ func getMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Respons
 func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Response {
 	client := resty.New()
 	reqBody := memstorage.Metrics{ID: mName, MType: mType}
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
+	var data bytes.Buffer
+	gzipWriter := gzip.NewWriter(&data)
+	_, err = gzipWriter.Write(jsonData)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+
 	request := client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(reqBody)
+		SetHeader("Content-Encoding", "gzip").
+		SetHeader("Accept-Encoding", "gzip").
+		SetBody(data)
 	resp, err := request.Post(addr.AddrCommand("value", "", "", ""))
 	if err != nil {
 		fmt.Println(err)
