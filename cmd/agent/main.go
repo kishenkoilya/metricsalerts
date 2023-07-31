@@ -51,7 +51,7 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
 	// storage.SendJSONGauges(addr)
 	// storage.SendJSONCounters(addr)
-	// storage.SendGauges(addr)
+	storage.SendGauges(addr)
 	storage.SendCounters(addr)
 }
 
