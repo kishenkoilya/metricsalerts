@@ -51,7 +51,7 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
 	// storage.SendJSONGauges(addr)
 	// storage.SendJSONCounters(addr)
-	storage.SendGauges(addr)
+	// storage.SendGauges(addr)
 	storage.SendCounters(addr)
 }
 
@@ -64,7 +64,7 @@ func getMetric(mType, mName string, addr *addressurl.AddressURL) *resty.Response
 	return resp
 }
 
-func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Response {
+func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool) *resty.Response {
 	client := resty.New()
 	reqBody := memstorage.Metrics{ID: mName, MType: mType}
 	jsonData, err := json.Marshal(reqBody)
@@ -73,21 +73,41 @@ func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Res
 		return nil
 	}
 
-	var buf bytes.Buffer
-	gzipWriter := gzip.NewWriter(&buf)
-	_, err = gzipWriter.Write(jsonData)
-	if err != nil {
-		fmt.Println(err)
-		return nil
+	request := client.R()
+	if usegzip {
+		fmt.Println("usegzip!!!!")
+		var buf bytes.Buffer
+		gzipWriter := gzip.NewWriter(&buf)
+		_, err = gzipWriter.Write(jsonData)
+		if err != nil {
+			fmt.Println(err)
+			return nil
+		}
+		gzipWriter.Close()
+		request.
+			SetHeader("Content-Encoding", "gzip").
+			SetHeader("Accept-Encoding", "gzip")
+		jsonData = buf.Bytes()
 	}
-	gzipWriter.Close()
 
-	request := client.R().
+	request.
 		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetHeader("Accept-Encoding", "gzip").
-		SetBody(&buf)
+		SetBody(jsonData)
+
 	resp, err := request.Post(addr.AddrCommand("value", "", "", ""))
+
+	fmt.Println("request.Header:")
+	for k, v := range request.Header {
+		fmt.Print(k + ": ")
+		for _, s := range v {
+			fmt.Print(fmt.Sprint(s))
+		}
+		fmt.Print("\n")
+	}
+	reqBody = memstorage.Metrics{ID: mName, MType: mType}
+	json.Unmarshal(jsonData, &reqBody)
+	reqBody.PrintMetrics()
+
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -190,16 +210,16 @@ func main() {
 				// 	fmt.Println(string(response.Body()))
 				// }
 				for k := range storage.Counters {
-					response := getJSONMetrics("counter", k, &addr)
-					fmt.Println(response.Proto() + " " + response.Status())
-					for k, v := range response.Header() {
-						fmt.Print(k + ": ")
-						for _, s := range v {
-							fmt.Print(fmt.Sprint(s))
-						}
-						fmt.Print("\n")
-					}
-					fmt.Println(string(response.Body()))
+					response := getJSONMetrics("counter", k, &addr, false)
+					fmt.Println("response proto: " + response.Proto() + " " + response.Status())
+					// for k, v := range response.Header() {
+					// 	fmt.Print(k + ": ")
+					// 	for _, s := range v {
+					// 		fmt.Print(fmt.Sprint(s))
+					// 	}
+					// 	fmt.Print("\n")
+					// }
+					// fmt.Println(string(response.Body()))
 				}
 			case <-ctx.Done():
 				return

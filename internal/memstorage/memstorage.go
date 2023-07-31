@@ -28,8 +28,10 @@ type Metrics struct {
 func (m *Metrics) PrintMetrics() {
 	if m.Delta != nil {
 		fmt.Println("ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(*m.Delta) + "; Value:" + fmt.Sprint(m.Value))
-	} else {
+	} else if m.Value != nil {
 		fmt.Println("ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(m.Delta) + "; Value:" + fmt.Sprint(*m.Value))
+	} else {
+		fmt.Println("ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(m.Delta) + "; Value:" + fmt.Sprint(m.Value))
 	}
 }
 

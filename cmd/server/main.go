@@ -68,6 +68,7 @@ func (r *LogResponseWriter) WriteHeader(status int) {
 
 func GzipHandle() routing.Handler {
 	return func(c *routing.Context) error {
+		sugar.Infoln(c.Request.Header.Get("Accept-Encoding"))
 		if !strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
 			return c.Next()
 		}
@@ -76,7 +77,6 @@ func GzipHandle() routing.Handler {
 		defer gz.Close()
 
 		c.Response.Header().Set("Content-Encoding", "gzip")
-		c.Response.Header().Set("Vary", "Accept-Encoding")
 
 		c.Response = GzipWriter{c.Response, gz}
 
@@ -147,17 +147,30 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
 		}
 
+		for k, v := range c.Request.Header {
+			fmt.Print(k + ": ")
+			for _, s := range v {
+				fmt.Print(fmt.Sprint(s))
+			}
+			fmt.Print("\n")
+		}
+		req.PrintMetrics()
+
 		_, err = validateValues(req.MType, req.ID)
 		resp := &memstorage.Metrics{}
-		if err == nil {
-			statusRes, resp = storage.GetMetrics(req.MType, req.ID)
-		} else {
+		if err != nil {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
+		}
+
+		statusRes, resp = storage.GetMetrics(req.MType, req.ID)
+		if statusRes != http.StatusOK {
+			sugar.Errorln("storage.GetMetrics failed: ", err.Error())
+			return c.WriteWithStatus(nil, statusRes)
 		}
 
 		respJSON, err := json.Marshal(resp)
 		if err != nil {
-			sugar.Errorln("json.Marshal failed", err.Error())
+			sugar.Errorln("json.Marshal failed: ", err.Error())
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
 		return c.WriteWithStatus(respJSON, statusRes)
