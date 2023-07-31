@@ -73,19 +73,20 @@ func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL) *resty.Res
 		return nil
 	}
 
-	var data bytes.Buffer
-	gzipWriter := gzip.NewWriter(&data)
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
 	_, err = gzipWriter.Write(jsonData)
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
+	gzipWriter.Close()
 
 	request := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetHeader("Accept-Encoding", "gzip").
-		SetBody(data)
+		SetBody(&buf)
 	resp, err := request.Post(addr.AddrCommand("value", "", "", ""))
 	if err != nil {
 		fmt.Println(err)
@@ -188,18 +189,18 @@ func main() {
 				// 	}
 				// 	fmt.Println(string(response.Body()))
 				// }
-				// for k := range storage.Counters {
-				// 	response := getJSONMetrics("counter", k, &addr)
-				// 	fmt.Println(response.Proto() + " " + response.Status())
-				// 	for k, v := range response.Header() {
-				// 		fmt.Print(k + ": ")
-				// 		for _, s := range v {
-				// 			fmt.Print(fmt.Sprint(s))
-				// 		}
-				// 		fmt.Print("\n")
-				// 	}
-				// 	fmt.Println(string(response.Body()))
-				// }
+				for k := range storage.Counters {
+					response := getJSONMetrics("counter", k, &addr)
+					fmt.Println(response.Proto() + " " + response.Status())
+					for k, v := range response.Header() {
+						fmt.Print(k + ": ")
+						for _, s := range v {
+							fmt.Print(fmt.Sprint(s))
+						}
+						fmt.Print("\n")
+					}
+					fmt.Println(string(response.Body()))
+				}
 			case <-ctx.Done():
 				return
 			}

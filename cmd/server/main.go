@@ -129,7 +129,6 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		var statusRes int
-		var body string
 		var req memstorage.Metrics
 
 		reqBody := c.Request.Body
@@ -137,6 +136,7 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			var err error
 			reqBody, err = gzip.NewReader(reqBody)
 			if err != nil {
+				sugar.Errorln("gzip.NewReader failed", err.Error())
 				return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 			}
 		}
@@ -157,13 +157,10 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 
 		respJSON, err := json.Marshal(resp)
 		if err != nil {
+			sugar.Errorln("json.Marshal failed", err.Error())
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
-		if err != nil {
-			return c.WriteWithStatus([]byte(body), statusRes)
-		} else {
-			return c.WriteWithStatus(respJSON, statusRes)
-		}
+		return c.WriteWithStatus(respJSON, statusRes)
 	}
 }
 
@@ -187,7 +184,6 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 	return func(c *routing.Context) error {
 		var statusRes int
-		var body string
 		var req *memstorage.Metrics
 		c.Response.Header().Set("Content-Type", "application/json")
 
@@ -218,11 +214,7 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		if err != nil {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
-		if err != nil {
-			return c.WriteWithStatus([]byte(body), statusRes)
-		} else {
-			return c.WriteWithStatus(respJSON, statusRes)
-		}
+		return c.WriteWithStatus(respJSON, statusRes)
 	}
 }
 
