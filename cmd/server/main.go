@@ -147,7 +147,7 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
 		}
 
-		statusRes, err = validateValues(req.MType, req.ID)
+		_, err = validateValues(req.MType, req.ID)
 		resp := &memstorage.Metrics{}
 		if err == nil {
 			statusRes, resp = storage.GetMetrics(req.MType, req.ID)
@@ -159,10 +159,10 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		if err != nil {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
-		if err == nil {
-			return c.WriteWithStatus(respJSON, statusRes)
-		} else {
+		if err != nil {
 			return c.WriteWithStatus([]byte(body), statusRes)
+		} else {
+			return c.WriteWithStatus(respJSON, statusRes)
 		}
 	}
 }
@@ -207,7 +207,7 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		req.PrintMetrics()
 		mType := req.MType
 		mName := req.ID
-		statusRes, err = validateValues(mType, mName)
+		_, err = validateValues(mType, mName)
 		if err == nil {
 			statusRes, req = storage.SaveMetrics(req)
 		} else {
@@ -218,10 +218,10 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		if err != nil {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
-		if err == nil {
-			return c.WriteWithStatus(respJSON, statusRes)
-		} else {
+		if err != nil {
 			return c.WriteWithStatus([]byte(body), statusRes)
+		} else {
+			return c.WriteWithStatus(respJSON, statusRes)
 		}
 	}
 }
