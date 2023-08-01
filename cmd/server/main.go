@@ -117,12 +117,6 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 		} else {
 			body = err.Error()
 		}
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write([]byte(body))
-			return err
-		}
 		return c.WriteWithStatus([]byte(body), statusRes)
 	}
 }
@@ -174,12 +168,6 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			// sugar.Errorln("json.Marshal failed: ", err.Error())
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write(respJSON)
-			return err
-		}
 		return c.WriteWithStatus(respJSON, statusRes)
 	}
 }
@@ -196,12 +184,6 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 			statusRes = saveValue(storage, mType, mName, mVal)
 		} else {
 			body = err.Error()
-		}
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write([]byte(body))
-			return err
 		}
 		return c.WriteWithStatus([]byte(body), statusRes)
 	}
@@ -239,12 +221,6 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		respJSON, err := json.Marshal(req)
 		if err != nil {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
-		}
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write(respJSON)
-			return err
 		}
 		return c.WriteWithStatus(respJSON, statusRes)
 	}
@@ -334,7 +310,7 @@ func main() {
 	router := routing.New()
 
 	router.Use(
-		// GzipHandle(),
+		GzipHandle(),
 		LoggingMiddleware(),
 		// access.Logger(log.Printf),
 		// slash.Remover(http.StatusMovedPermanently),

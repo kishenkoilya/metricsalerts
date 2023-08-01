@@ -110,6 +110,10 @@ func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bo
 		SetBody(jsonData)
 
 	resp, err := request.Post(addr.AddrCommand("value", "", "", ""))
+	if err != nil {
+		fmt.Println("Error posting:", err.Error())
+	}
+
 	// fmt.Println("request.Header:")
 	// for k, v := range request.Header {
 	// 	fmt.Print(k + ": ")
