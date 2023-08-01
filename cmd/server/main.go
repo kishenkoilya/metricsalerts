@@ -109,7 +109,7 @@ func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Content-Type", "html/text")
+	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(storage.PrintAll()))
 	w.WriteHeader(http.StatusOK)
 }
