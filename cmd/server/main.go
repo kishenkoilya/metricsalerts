@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,248 +14,293 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v6"
-	routing "github.com/go-ozzo/ozzo-routing/v2"
-	"github.com/go-ozzo/ozzo-routing/v2/fault"
+	"github.com/julienschmidt/httprouter"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 	"go.uber.org/zap"
 )
 
+var storage *memstorage.MemStorage
 var sugar zap.SugaredLogger
 
 type Config struct {
 	Address string `env:"ADDRESS"`
 }
 
-func LoggingMiddleware() routing.Handler {
-	return func(c *routing.Context) error {
+func LoggingMiddleware(next httprouter.Handle) httprouter.Handle {
+	return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		start := time.Now()
-		uri := c.Request.RequestURI
-		method := c.Request.Method
-		rw := &LogResponseWriter{c.Response, http.StatusOK, 0}
-		c.Response = rw
+		uri := r.RequestURI
+		method := r.Method
+		rw := &LogResponseWriter{ResponseWriter: w, StatusCode: http.StatusOK}
+		w = rw
 
-		err := c.Next()
+		next(w, r, ps)
 
 		duration := time.Since(start)
 		sugar.Infoln(
 			"uri", uri,
 			"method", method,
-			"status", rw.Status,
+			"status", rw.StatusCode,
 			"duration", duration,
-			"size", rw.BytesWritten,
-			"Accept-Encoding", c.Request.Header.Get("Accept-Encoding"),
+			"size", rw.Size,
+			"Accept-Encoding", r.Header.Get("Accept-Encoding"),
 		)
-
-		return err
-	}
+	})
 }
 
 type LogResponseWriter struct {
 	http.ResponseWriter
-	Status       int
-	BytesWritten int64
+	StatusCode int
+	Size       int
+	IsWritten  bool
 }
 
-func (r *LogResponseWriter) Write(p []byte) (int, error) {
-	written, err := r.ResponseWriter.Write(p)
-	r.BytesWritten += int64(written)
-	return written, err
+func (lrw *LogResponseWriter) Write(b []byte) (int, error) {
+	if !lrw.IsWritten {
+		lrw.IsWritten = true
+		lrw.StatusCode = http.StatusOK
+	}
+	size, err := lrw.ResponseWriter.Write(b)
+	lrw.Size += size // Увеличиваем размер ответа на количество записанных байт
+	return size, err
 }
 
-func (r *LogResponseWriter) WriteHeader(status int) {
-	r.Status = status
-	r.ResponseWriter.WriteHeader(status)
-}
-
-// func GzipHandle() routing.Handler {
-// 	return func(c *routing.Context) error {
-// 		if !strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-// 			return c.Next()
-// 		}
-
-// 		gz, err := gzip.NewWriterLevel(c.Response, gzip.BestSpeed)
-// 		if err != nil {
-// 			sugar.Errorln(c.Response, err.Error())
-// 		}
-// 		defer gz.Close()
-
-// 		c.Response = gzipWriter{ResponseWriter: c.Response, Writer: gz}
-// 		c.Response.Header().Set("Content-Encoding", "gzip")
-
-// 		return c.Next()
-// 	}
-// }
-
-// type gzipWriter struct {
-// 	http.ResponseWriter
-// 	Writer io.Writer
-// }
-
-// func (w gzipWriter) Write(b []byte) (int, error) {
-// 	// w.Writer будет отвечать за gzip-сжатие, поэтому пишем в него
-// 	return w.Writer.Write(b)
-// }
-
-func printAllPage(storage *memstorage.MemStorage) routing.Handler {
-	return func(c *routing.Context) error {
-		path := strings.Trim(c.Request.URL.Path, "/")
-		if path != "" {
-			return c.WriteWithStatus([]byte(""), http.StatusNotFound)
-		}
-		return c.WriteWithStatus([]byte(storage.PrintAll()), http.StatusOK)
+// Переопределение WriteHeader метода для записи статуса ответа
+func (lrw *LogResponseWriter) WriteHeader(statusCode int) {
+	if !lrw.IsWritten {
+		lrw.StatusCode = statusCode
+		lrw.ResponseWriter.WriteHeader(statusCode)
+		lrw.IsWritten = true
 	}
 }
+func GzipMiddleware(next httprouter.Handle) httprouter.Handle {
+	return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 
-func getPage(storage *memstorage.MemStorage) routing.Handler {
-	return func(c *routing.Context) error {
-		mType := c.Param("mType")
-		mName := c.Param("mName")
-		body := ""
-
-		statusRes, err := validateValues(mType, mName)
-		if err != nil {
-			sugar.Errorln("validateValues error: ", err.Error())
-			return c.WriteWithStatus([]byte(body), statusRes)
-		}
-		statusRes, body = getValue(storage, mType, mName)
-		if statusRes != http.StatusOK {
-			return c.WriteWithStatus([]byte(body), statusRes)
-		}
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write([]byte(body))
-			sugar.Errorln("gzip write failed: ", err.Error())
-		}
-		return c.WriteWithStatus([]byte(body), statusRes)
-	}
-}
-
-func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
-	return func(c *routing.Context) error {
-		var statusRes int
-		var req memstorage.Metrics
-
-		reqBody := c.Request.Body
-		if strings.Contains(c.Request.Header.Get("Content-Encoding"), "gzip") {
-			var err error
-			reqBody, err = gzip.NewReader(reqBody)
+			gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 			if err != nil {
-				sugar.Errorln("gzip.NewReader failed", err.Error())
-				return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
+				io.WriteString(w, err.Error())
+				return
 			}
+			// defer gz.Close()
+
+			w.Header().Set("Content-Encoding", "gzip")
+
+			next(gzipWriter{ResponseWriter: w, Writer: gz}, r, ps)
+			gz.Close()
 		}
 
-		c.Response.Header().Set("Content-Type", "application/json")
-		err := json.NewDecoder(reqBody).Decode(&req)
-		if err != nil {
-			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
-		}
-
-		// for k, v := range c.Request.Header {
-		// 	fmt.Print(k + ": ")
-		// 	for _, s := range v {
-		// 		fmt.Print(fmt.Sprint(s))
-		// 	}
-		// 	fmt.Print("\n")
-		// }
-		// req.PrintMetrics()
-
-		_, err = validateValues(req.MType, req.ID)
-		resp := &memstorage.Metrics{}
-		if err != nil {
-			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
-		}
-
-		statusRes, resp = storage.GetMetrics(req.MType, req.ID)
-		if statusRes != http.StatusOK {
-			// sugar.Errorln("storage.GetMetrics failed: ", statusRes)
-			return c.WriteWithStatus(nil, statusRes)
-		}
-
-		respJSON, err := json.Marshal(resp)
-		if err != nil {
-			// sugar.Errorln("json.Marshal failed: ", err.Error())
-			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
-		}
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write(respJSON)
-			sugar.Errorln("gzip write failed: ", err.Error())
-		}
-		return c.WriteWithStatus(respJSON, statusRes)
-	}
+	})
 }
 
-func updatePage(storage *memstorage.MemStorage) routing.Handler {
-	return func(c *routing.Context) error {
-		mType := c.Param("mType")
-		mName := c.Param("mName")
-		mVal := c.Param("mVal")
-		body := "Update successful"
-
-		statusRes, err := validateValues(mType, mName)
-		if err != nil {
-			sugar.Errorln("validateValues error: ", err.Error())
-			return c.WriteWithStatus([]byte(body), statusRes)
-		}
-		statusRes = saveValue(storage, mType, mName, mVal)
-		if statusRes != http.StatusOK {
-			return c.WriteWithStatus([]byte(body), statusRes)
-		}
-
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write([]byte(body))
-			sugar.Errorln("gzip write failed: ", err.Error())
-		}
-		return c.WriteWithStatus([]byte(body), statusRes)
-	}
+type gzipWriter struct {
+	http.ResponseWriter
+	Writer io.Writer
 }
 
-func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
-	return func(c *routing.Context) error {
-		var statusRes int
-		var req *memstorage.Metrics
-		c.Response.Header().Set("Content-Type", "application/json")
+func (w gzipWriter) Write(b []byte) (int, error) {
+	// w.Writer будет отвечать за gzip-сжатие, поэтому пишем в него
+	return w.Writer.Write(b)
+}
 
-		reqBody := c.Request.Body
-		if strings.Contains(c.Request.Header.Get("Content-Encoding"), "gzip") {
-			var err error
-			reqBody, err = gzip.NewReader(reqBody)
-			if err != nil {
-				return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
-			}
-		}
-
-		err := json.NewDecoder(reqBody).Decode(&req)
-		if err != nil {
-			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
-		}
-		// req.PrintMetrics()
-		mType := req.MType
-		mName := req.ID
-		_, err = validateValues(mType, mName)
-		if err == nil {
-			statusRes, req = storage.SaveMetrics(req)
-		} else {
-			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
-		}
-
-		respJSON, err := json.Marshal(req)
-		if err != nil {
-			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
-		}
-		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-			gz := gzip.NewWriter(c.Response)
-			defer gz.Close()
-			_, err := gz.Write(respJSON)
-			sugar.Errorln("gzip write failed: ", err.Error())
-		}
-		return c.WriteWithStatus(respJSON, statusRes)
+func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	path := strings.Trim(r.URL.Path, "/")
+	if path != "" {
+		w.WriteHeader(http.StatusNotFound)
+		return
 	}
+	w.Write([]byte(storage.PrintAll()))
+	w.WriteHeader(http.StatusOK)
+}
+
+func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	mType := ps.ByName("mType")
+	mName := ps.ByName("mName")
+	body := ""
+
+	statusRes, err := validateValues(mType, mName)
+	if err != nil {
+		sugar.Errorln("validateValues error: ", err.Error())
+		w.Write([]byte(body))
+		w.WriteHeader(statusRes)
+		return
+	}
+	statusRes, body = getValue(storage, mType, mName)
+	if statusRes != http.StatusOK {
+		w.Write([]byte(body))
+		w.WriteHeader(statusRes)
+		return
+	}
+	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+	// 	c.Response.Header().Set("Content-Encoding", "gzip")
+	// 	gz := gzip.NewWriter(c.Response)
+	// 	defer gz.Close()
+	// 	_, err := gz.Write([]byte(body))
+	// 	if err != nil {
+	// 		sugar.Errorln("gzip write failed: ", err.Error())
+	// 	}
+	// }
+	w.Write([]byte(body))
+	w.WriteHeader(statusRes)
+	return
+}
+
+func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	mType := ps.ByName("mType")
+	mName := ps.ByName("mName")
+	mVal := ps.ByName("mVal")
+	body := "Update successful"
+
+	statusRes, err := validateValues(mType, mName)
+	if err != nil {
+		sugar.Errorln("validateValues error: ", err.Error())
+		w.Write([]byte(body))
+		w.WriteHeader(statusRes)
+		return
+	}
+	statusRes = saveValue(storage, mType, mName, mVal)
+	if statusRes != http.StatusOK {
+		w.Write([]byte(body))
+		w.WriteHeader(statusRes)
+		return
+	}
+
+	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+	// 	c.Response.Header().Set("Content-Encoding", "gzip")
+	// 	gz := gzip.NewWriter(c.Response)
+	// 	defer gz.Close()
+	// 	_, err := gz.Write([]byte(body))
+	// 	if err != nil {
+	// 		sugar.Errorln("gzip write failed: ", err.Error())
+	// 	}
+	// }
+	w.Write([]byte(body))
+	w.WriteHeader(statusRes)
+	return
+}
+
+func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var statusRes int
+	var req memstorage.Metrics
+
+	reqBody := r.Body
+	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+		var err error
+		reqBody, err = gzip.NewReader(reqBody)
+		if err != nil {
+			sugar.Errorln("gzip.NewReader failed", err.Error())
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewDecoder(reqBody).Decode(&req)
+	if err != nil {
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// for k, v := range c.Request.Header {
+	// 	fmt.Print(k + ": ")
+	// 	for _, s := range v {
+	// 		fmt.Print(fmt.Sprint(s))
+	// 	}
+	// 	fmt.Print("\n")
+	// }
+	// req.PrintMetrics()
+
+	_, err = validateValues(req.MType, req.ID)
+	resp := &memstorage.Metrics{}
+	if err != nil {
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	statusRes, resp = storage.GetMetrics(req.MType, req.ID)
+	if statusRes != http.StatusOK {
+		// sugar.Errorln("storage.GetMetrics failed: ", statusRes)
+		w.WriteHeader(statusRes)
+		return
+	}
+
+	respJSON, err := json.Marshal(resp)
+	if err != nil {
+		// sugar.Errorln("json.Marshal failed: ", err.Error())
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+	// 	c.Response.Header().Set("Content-Encoding", "gzip")
+	// 	gz := gzip.NewWriter(c.Response)
+	// 	defer gz.Close()
+	// 	_, err := gz.Write(respJSON)
+	// 	if err != nil {
+	// 		sugar.Errorln("gzip write failed: ", err.Error())
+	// 	}
+	// }
+	w.Write(respJSON)
+	w.WriteHeader(statusRes)
+	return
+
+}
+
+func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var statusRes int
+	var req *memstorage.Metrics
+	w.Header().Set("Content-Type", "application/json")
+
+	reqBody := r.Body
+	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+		var err error
+		reqBody, err = gzip.NewReader(reqBody)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	err := json.NewDecoder(reqBody).Decode(&req)
+	if err != nil {
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	// req.PrintMetrics()
+	mType := req.MType
+	mName := req.ID
+	_, err = validateValues(mType, mName)
+	if err == nil {
+		statusRes, req = storage.SaveMetrics(req)
+	} else {
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	respJSON, err := json.Marshal(req)
+	if err != nil {
+		w.Write([]byte(err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	// if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+	// 	w.Header().Set("Content-Encoding", "gzip")
+	// 	gz := gzip.NewWriter(w)
+	// 	defer gz.Close()
+	// 	gz.Write(respJSON)
+	// 	return
+	// }
+	sugar.Infoln(string(respJSON))
+
+	w.Write(respJSON)
+	w.WriteHeader(statusRes)
+	return
 }
 
 func validateValues(mType, mName string) (int, error) {
@@ -337,29 +383,13 @@ func main() {
 
 	addr := getVars()
 
-	storage := memstorage.NewMemStorage()
-	router := routing.New()
-
-	router.Use(
-		// GzipHandle(),
-		LoggingMiddleware(),
-		// access.Logger(log.Printf),
-		// slash.Remover(http.StatusMovedPermanently),
-		fault.Recovery(log.Printf),
-	)
-
-	router.Post("/update/", updateJSONPage(storage))
-	router.Post("/value/", getJSONPage(storage))
-	router.Post("/update/<mType>/<mName>/<mVal>", updatePage(storage))
-	router.Get("/value/<mType>/<mName>", getPage(storage))
-	router.Get("/", printAllPage(storage))
-
-	http.Handle("/", router)
-
-	sugar.Infow(
-		"Starting server",
-		"addr", addr,
-	)
+	storage = memstorage.NewMemStorage()
+	router := httprouter.New()
+	router.GET("/", LoggingMiddleware(GzipMiddleware(printAllPage)))
+	router.GET("/value/:mType/:mName", LoggingMiddleware(GzipMiddleware(getPage)))
+	router.POST("/update/:mType/:mName/:mVal", LoggingMiddleware(GzipMiddleware(updatePage)))
+	router.POST("/value/", LoggingMiddleware(GzipMiddleware(getJSONPage)))
+	router.POST("/update/", LoggingMiddleware(GzipMiddleware(updateJSONPage)))
 
 	err = http.ListenAndServe(addr, router)
 	if err != nil {
