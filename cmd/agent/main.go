@@ -51,14 +51,14 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 }
 
 func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
-	SendJSONGauges(addr, storage)
-	SendJSONCounters(addr, storage)
-	// SendGauges(addr, storage)
-	// SendCounters(addr, storage)
+	// SendJSONGauges(addr, storage)
+	// SendJSONCounters(addr, storage)
+	SendGauges(addr, storage)
+	SendCounters(addr, storage)
 }
 
 func SendGauges(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-
+	storage.Mutex.Lock()
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
@@ -82,17 +82,17 @@ func SendGauges(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
 			fmt.Println(string(resp.Body()))
 		}
 	}
-
+	storage.Mutex.Unlock()
 }
 
-func SendCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
-
+func SendCounters(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+	storage.Mutex.Lock()
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
 		},
 	})
-	for metric, value := range m.Counters {
+	for metric, value := range storage.Counters {
 		cli := client.R()
 		resp, err := cli.Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
 		fmt.Println(cli.RawRequest.URL)
@@ -110,18 +110,18 @@ func SendCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 			fmt.Println(string(resp.Body()))
 		}
 	}
-
+	storage.Mutex.Unlock()
 }
 
-func SendJSONGauges(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
-	m.Mutex.Lock()
+func SendJSONGauges(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+	storage.Mutex.Lock()
 
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
 		},
 	})
-	for metric, value := range m.Gauges {
+	for metric, value := range storage.Gauges {
 		reqBody := memstorage.Metrics{
 			ID:    metric,
 			MType: "gauge",
@@ -172,18 +172,18 @@ func SendJSONGauges(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 		// }
 	}
 
-	m.Mutex.Unlock()
+	storage.Mutex.Unlock()
 }
 
-func SendJSONCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
-	m.Mutex.Lock()
+func SendJSONCounters(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+	storage.Mutex.Lock()
 
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
 		},
 	})
-	for metric, value := range m.Counters {
+	for metric, value := range storage.Counters {
 		reqBody := memstorage.Metrics{
 			ID:    metric,
 			MType: "counter",
@@ -241,8 +241,7 @@ func SendJSONCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 		// 	fmt.Println(string(responseData))
 		// }
 	}
-
-	m.Mutex.Unlock()
+	storage.Mutex.Unlock()
 }
 
 func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool) *resty.Response {
@@ -408,9 +407,17 @@ func main() {
 				sendMetrics(storage, &addr)
 				// resp := getAllMetrics(&addr)
 				// fmt.Println(string(resp.Body()))
+				// fmt.Println("all metr")
 				// client := resty.New().R()
-				// resp, _ = client.Post(addr.AddrCommand("update", "counter", "testCounter", fmt.Sprint(123)))
-				// fmt.Println(client.RawRequest.URL)
+				// client.Header.Set("Accept", "html/text")
+				// client.Header.Set("Accept-Encoding", "gzip")
+				// resp, err := client.Get(addr.AddrEmpty())
+				// if err != nil {
+				// 	fmt.Println(err.Error())
+				// }
+				// fmt.Println(client.URL)
+				// fmt.Println(string(resp.Body()))
+				// // fmt.Println(client.RawRequest.URL)
 				// fmt.Println(resp.Proto() + " " + resp.Status())
 				// for k, v := range resp.Header() {
 				// 	fmt.Print(k + ": ")
