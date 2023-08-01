@@ -89,7 +89,7 @@ func GzipMiddleware(next httprouter.Handle) httprouter.Handle {
 			next(gzipWriter{ResponseWriter: w, Writer: gz}, r, ps)
 			gz.Close()
 		}
-
+		next(w, r, ps)
 	})
 }
 
@@ -104,6 +104,7 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 }
 
 func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	sugar.Infoln("printAllPage")
 	path := strings.Trim(r.URL.Path, "/")
 	if path != "" {
 		w.WriteHeader(http.StatusNotFound)
@@ -114,6 +115,7 @@ func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 }
 
 func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	sugar.Infoln("getPage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
 	body := ""
@@ -145,6 +147,7 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	sugar.Infoln("updatePage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
 	mVal := ps.ByName("mVal")
@@ -179,6 +182,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	sugar.Infoln("getJSONPage")
 	var statusRes int
 	var req memstorage.Metrics
 
@@ -243,6 +247,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	sugar.Infoln("updateJSONPage")
 	var statusRes int
 	var req *memstorage.Metrics
 	w.Header().Set("Content-Type", "application/json")

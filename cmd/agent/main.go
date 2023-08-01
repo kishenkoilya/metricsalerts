@@ -57,16 +57,17 @@ func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
 	SendCounters(addr, storage)
 }
 
-func SendGauges(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
-	m.Mutex.Lock()
+func SendGauges(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
 
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
 		},
 	})
-	for metric, value := range m.Gauges {
-		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
+	for metric, value := range storage.Gauges {
+		cli := client.R()
+		resp, err := cli.Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
+		fmt.Println(cli.RawRequest.URL)
 		if err != nil {
 			fmt.Println("SendGauges error: " + fmt.Sprint(err))
 		} else {
@@ -82,11 +83,9 @@ func SendGauges(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 		}
 	}
 
-	m.Mutex.Unlock()
 }
 
 func SendCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
-	m.Mutex.Lock()
 
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
@@ -94,7 +93,9 @@ func SendCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 		},
 	})
 	for metric, value := range m.Counters {
-		resp, err := client.R().Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
+		cli := client.R()
+		resp, err := cli.Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
+		fmt.Println(cli.RawRequest.URL)
 		if err != nil {
 			fmt.Println("SendCounters error: " + fmt.Sprint(err))
 		} else {
@@ -110,7 +111,6 @@ func SendCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 		}
 	}
 
-	m.Mutex.Unlock()
 }
 
 func SendJSONGauges(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
@@ -394,10 +394,13 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				// fmt.Println("Sending metrics")
+				fmt.Println("Sending metrics")
 				sendMetrics(storage, &addr)
-				// client := resty.New()
-				// resp, _ := client.R().Post(addr.AddrCommand("update", "counter", "testCounter", "none"))
+				// resp := getAllMetrics(&addr)
+				// fmt.Println(string(resp.Body()))
+				// client := resty.New().R()
+				// resp, _ = client.Post(addr.AddrCommand("update", "counter", "testCounter", fmt.Sprint(123)))
+				// fmt.Println(client.RawRequest.URL)
 				// fmt.Println(resp.Proto() + " " + resp.Status())
 				// for k, v := range resp.Header() {
 				// 	fmt.Print(k + ": ")
@@ -406,6 +409,19 @@ func main() {
 				// 	}
 				// 	fmt.Print("\n")
 				// }
+				// fmt.Println(string(resp.Body()))
+				// resp, _ = client.Get(addr.AddrCommand("value", "counter", "testCounter", ""))
+				// fmt.Println(client.RawRequest.URL)
+				// fmt.Println(resp.Proto() + " " + resp.Status())
+				// for k, v := range resp.Header() {
+				// 	fmt.Print(k + ": ")
+				// 	for _, s := range v {
+				// 		fmt.Print(fmt.Sprint(s))
+				// 	}
+				// 	fmt.Print("\n")
+				// }
+				// fmt.Println(string(resp.Body()))
+				// resp = getAllMetrics(&addr)
 				// fmt.Println(string(resp.Body()))
 
 				// resp := getAllMetrics(&addr)
