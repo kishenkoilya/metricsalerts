@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 
@@ -23,6 +24,16 @@ type Metrics struct {
 	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
 	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
 	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
+}
+
+func decompressGzipResponse(data []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	return io.ReadAll(reader)
 }
 
 func (m *Metrics) PrintMetrics() {
@@ -202,15 +213,22 @@ func (m *MemStorage) SendJSONGauges(addr *addressurl.AddressURL) {
 		if err != nil {
 			fmt.Println("SendJSONGauges error: " + fmt.Sprint(err))
 		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
+			// fmt.Println(resp.Proto() + " " + resp.Status())
+			// for k, v := range resp.Header() {
+			// 	fmt.Print(k + ": ")
+			// 	for _, s := range v {
+			// 		fmt.Print(fmt.Sprint(s))
+			// 	}
+			// 	fmt.Print("\n")
+			// }
+			// fmt.Println(string(resp.Body()))
 			fmt.Println(string(resp.Body()))
+			responseData, err := decompressGzipResponse(resp.Body())
+			if err != nil {
+				fmt.Println("Error decompressing response:", err.Error())
+			}
+			fmt.Println(string(responseData))
+
 		}
 	}
 
@@ -257,15 +275,21 @@ func (m *MemStorage) SendJSONCounters(addr *addressurl.AddressURL) {
 		if err != nil {
 			fmt.Println("SendJSONCounters error: " + fmt.Sprint(err))
 		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
+			// fmt.Println(resp.Proto() + " " + resp.Status())
+			// for k, v := range resp.Header() {
+			// 	fmt.Print(k + ": ")
+			// 	for _, s := range v {
+			// 		fmt.Print(fmt.Sprint(s))
+			// 	}
+			// 	fmt.Print("\n")
+			// }
+			// fmt.Println(string(resp.Body()))
 			fmt.Println(string(resp.Body()))
+			responseData, err := decompressGzipResponse(resp.Body())
+			if err != nil {
+				fmt.Println("Error decompressing response:", err.Error())
+			}
+			fmt.Println(string(responseData))
 		}
 	}
 

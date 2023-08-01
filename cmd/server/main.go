@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/caarlos0/env/v6"
 	routing "github.com/go-ozzo/ozzo-routing/v2"
-	"github.com/go-ozzo/ozzo-routing/v2/fault"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 	"go.uber.org/zap"
 )
@@ -71,34 +71,28 @@ func GzipHandle() routing.Handler {
 		if !strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
 			return c.Next()
 		}
-		gzippedBuf := new(strings.Builder)
-		gz := gzip.NewWriter(c.Response)
+
+		gz, err := gzip.NewWriterLevel(c.Response, gzip.BestSpeed)
+		if err != nil {
+			sugar.Errorln(c.Response, err.Error())
+		}
 		defer gz.Close()
 
+		c.Response = gzipWriter{ResponseWriter: c.Response, Writer: gz}
 		c.Response.Header().Set("Content-Encoding", "gzip")
 
-		c.Response = &GzipWriter{
-			gzWriter:       gz,
-			ResponseWriter: c.Response,
-		}
-		if err := c.Next(); err != nil {
-			return err
-		}
-
-		// Получаем данные из буфера и записываем их в ответ.
-		gz.Flush()
-		c.Response.Write([]byte(gzippedBuf.String()))
-		return nil
+		return c.Next()
 	}
 }
 
-type GzipWriter struct {
-	gzWriter *gzip.Writer
+type gzipWriter struct {
 	http.ResponseWriter
+	Writer io.Writer
 }
 
-func (w *GzipWriter) Write(b []byte) (int, error) {
-	return w.gzWriter.Write(b)
+func (w gzipWriter) Write(b []byte) (int, error) {
+	// w.Writer будет отвечать за gzip-сжатие, поэтому пишем в него
+	return w.Writer.Write(b)
 }
 
 func printAllPage(storage *memstorage.MemStorage) routing.Handler {
@@ -122,6 +116,12 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 			statusRes, body = getValue(storage, mType, mName)
 		} else {
 			body = err.Error()
+		}
+		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+			gz := gzip.NewWriter(c.Response)
+			defer gz.Close()
+			_, err := gz.Write([]byte(body))
+			return err
 		}
 		return c.WriteWithStatus([]byte(body), statusRes)
 	}
@@ -174,6 +174,12 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			// sugar.Errorln("json.Marshal failed: ", err.Error())
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
+		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+			gz := gzip.NewWriter(c.Response)
+			defer gz.Close()
+			_, err := gz.Write(respJSON)
+			return err
+		}
 		return c.WriteWithStatus(respJSON, statusRes)
 	}
 }
@@ -190,6 +196,12 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 			statusRes = saveValue(storage, mType, mName, mVal)
 		} else {
 			body = err.Error()
+		}
+		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+			gz := gzip.NewWriter(c.Response)
+			defer gz.Close()
+			_, err := gz.Write([]byte(body))
+			return err
 		}
 		return c.WriteWithStatus([]byte(body), statusRes)
 	}
@@ -227,6 +239,12 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		respJSON, err := json.Marshal(req)
 		if err != nil {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
+		}
+		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
+			gz := gzip.NewWriter(c.Response)
+			defer gz.Close()
+			_, err := gz.Write(respJSON)
+			return err
 		}
 		return c.WriteWithStatus(respJSON, statusRes)
 	}
@@ -316,11 +334,11 @@ func main() {
 	router := routing.New()
 
 	router.Use(
-		GzipHandle(),
+		// GzipHandle(),
 		LoggingMiddleware(),
 		// access.Logger(log.Printf),
 		// slash.Remover(http.StatusMovedPermanently),
-		fault.Recovery(log.Printf),
+		// fault.Recovery(log.Printf),
 	)
 
 	router.Post("/update/", updateJSONPage(storage))

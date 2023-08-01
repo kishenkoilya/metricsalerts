@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -65,6 +66,16 @@ func getMetric(mType, mName string, addr *addressurl.AddressURL) *resty.Response
 	return resp
 }
 
+func decompressGzipResponse(data []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	return io.ReadAll(reader)
+}
+
 func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool) *resty.Response {
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
@@ -80,7 +91,6 @@ func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bo
 
 	request := client.R()
 	if usegzip {
-		fmt.Println("usegzip!!!!")
 		var buf bytes.Buffer
 		gzipWriter := gzip.NewWriter(&buf)
 		_, err = gzipWriter.Write(jsonData)
@@ -100,19 +110,20 @@ func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bo
 		SetBody(jsonData)
 
 	resp, err := request.Post(addr.AddrCommand("value", "", "", ""))
-
-	fmt.Println("request.Header:")
-	for k, v := range request.Header {
-		fmt.Print(k + ": ")
-		for _, s := range v {
-			fmt.Print(fmt.Sprint(s))
-		}
-		fmt.Print("\n")
-	}
-
+	// fmt.Println("request.Header:")
+	// for k, v := range request.Header {
+	// 	fmt.Print(k + ": ")
+	// 	for _, s := range v {
+	// 		fmt.Print(fmt.Sprint(s))
+	// 	}
+	// 	fmt.Print("\n")
+	// }
+	fmt.Println(string(resp.Body()))
+	responseData, err := decompressGzipResponse(resp.Body())
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Error decompressing response:", err.Error())
 	}
+	fmt.Println(string(responseData))
 	return resp
 }
 
@@ -202,26 +213,26 @@ func main() {
 				for k := range storage.Gauges {
 					response := getJSONMetrics("gauge", k, &addr, true)
 					fmt.Println(response.Proto() + " " + response.Status())
-					for k, v := range response.Header() {
-						fmt.Print(k + ": ")
-						for _, s := range v {
-							fmt.Print(fmt.Sprint(s))
-						}
-						fmt.Print("\n")
-					}
-					fmt.Println(string(response.Body()))
+					// for k, v := range response.Header() {
+					// 	fmt.Print(k + ": ")
+					// 	for _, s := range v {
+					// 		fmt.Print(fmt.Sprint(s))
+					// 	}
+					// 	fmt.Print("\n")
+					// }
+					// fmt.Println(string(response.Body()))
 				}
 				for k := range storage.Counters {
 					response := getJSONMetrics("counter", k, &addr, true)
 					fmt.Println("response proto: " + response.Proto() + " " + response.Status())
-					for k, v := range response.Header() {
-						fmt.Print(k + ": ")
-						for _, s := range v {
-							fmt.Print(fmt.Sprint(s))
-						}
-						fmt.Print("\n")
-					}
-					fmt.Println(string(response.Body()))
+					// for k, v := range response.Header() {
+					// 	fmt.Print(k + ": ")
+					// 	for _, s := range v {
+					// 		fmt.Print(fmt.Sprint(s))
+					// 	}
+					// 	fmt.Print("\n")
+					// }
+					// fmt.Println(string(response.Body()))
 
 				}
 			case <-ctx.Done():
