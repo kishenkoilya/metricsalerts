@@ -73,23 +73,23 @@ func (lrw *LogResponseWriter) WriteHeader(statusCode int) {
 		lrw.IsWritten = true
 	}
 }
+
 func GzipMiddleware(next httprouter.Handle) httprouter.Handle {
 	return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-
-			gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
-			if err != nil {
-				io.WriteString(w, err.Error())
-				return
-			}
-			// defer gz.Close()
-
-			w.Header().Set("Content-Encoding", "gzip")
-
-			next(gzipWriter{ResponseWriter: w, Writer: gz}, r, ps)
-			gz.Close()
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next(w, r, ps)
+			return
 		}
-		next(w, r, ps)
+		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			io.WriteString(w, err.Error())
+			return
+		}
+		defer gz.Close()
+
+		w.Header().Set("Content-Encoding", "gzip")
+
+		next(gzipWriter{ResponseWriter: w, Writer: gz}, r, ps)
 	})
 }
 
@@ -99,7 +99,6 @@ type gzipWriter struct {
 }
 
 func (w gzipWriter) Write(b []byte) (int, error) {
-	// w.Writer будет отвечать за gzip-сжатие, поэтому пишем в него
 	return w.Writer.Write(b)
 }
 
@@ -159,9 +158,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error validating type and name", statusRes)
 		return
 	}
-	fmt.Println(mVal)
 	statusRes = saveValue(storage, mType, mName, mVal)
-	fmt.Println(statusRes)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("saveValue error: ", err.Error())
 		http.Error(w, "Error parsing value", statusRes)
@@ -243,7 +240,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// 	}
 	// }
 	w.Write(respJSON)
-	w.WriteHeader(statusRes)
+	// w.WriteHeader(statusRes)
 }
 
 func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -271,13 +268,15 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	mType := req.MType
 	mName := req.ID
 	_, err = validateValues(mType, mName)
-	if err == nil {
-		statusRes, req = storage.SaveMetrics(req)
-	} else {
+	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
-
+	statusRes, req = storage.SaveMetrics(req)
+	if statusRes != http.StatusOK {
+		http.Error(w, "storage.SaveMetrics failed", statusRes)
+		return
+	}
 	respJSON, err := json.Marshal(req)
 	if err != nil {
 		http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
@@ -293,7 +292,7 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	sugar.Infoln(string(respJSON))
 
 	w.Write(respJSON)
-	w.WriteHeader(statusRes)
+	// w.WriteHeader(statusRes)
 }
 
 func validateValues(mType, mName string) (int, error) {

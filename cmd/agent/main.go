@@ -51,10 +51,10 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 }
 
 func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
-	// SendJSONGauges(addr, storage)
-	// SendJSONCounters(addr, storage)
-	SendGauges(addr, storage)
-	SendCounters(addr, storage)
+	SendJSONGauges(addr, storage)
+	SendJSONCounters(addr, storage)
+	// SendGauges(addr, storage)
+	// SendCounters(addr, storage)
 }
 
 func SendGauges(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
@@ -153,25 +153,23 @@ func SendJSONGauges(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 		if err != nil {
 			fmt.Println("SendJSONGauges error: " + fmt.Sprint(err))
 		} else {
-			// fmt.Println(resp.Proto() + " " + resp.Status())
-			// for k, v := range resp.Header() {
-			// 	fmt.Print(k + ": ")
-			// 	for _, s := range v {
-			// 		fmt.Print(fmt.Sprint(s))
-			// 	}
-			// 	fmt.Print("\n")
-			// }
-			// fmt.Println(string(resp.Body()))
-			fmt.Println(string(resp.Body()))
-			// if strings.Contains(resp.Header().Get("Content-Encoding"), "gzip") {
-			// 	responseData, err := decompressGzipResponse(resp.Body())
-			// 	if err != nil {
-			// 		fmt.Println("Error decompressing response:", err.Error())
-			// 	}
-			// 	fmt.Println(string(responseData))
-			// }
-
+			fmt.Println(resp.Proto() + " " + resp.Status())
+			for k, v := range resp.Header() {
+				fmt.Print(k + ": ")
+				for _, s := range v {
+					fmt.Print(fmt.Sprint(s))
+				}
+				fmt.Print("\n")
+			}
 		}
+		fmt.Println(string(resp.Body()))
+		// if strings.Contains(resp.Header().Get("Content-Encoding"), "gzip") {
+		// 	responseData, err := decompressGzipResponse(resp.Body())
+		// 	if err != nil {
+		// 		fmt.Println("Error decompressing response:", err.Error())
+		// 	}
+		// 	fmt.Println(string(responseData))
+		// }
 	}
 
 	m.Mutex.Unlock()
@@ -214,6 +212,14 @@ func SendJSONCounters(addr *addressurl.AddressURL, m *memstorage.MemStorage) {
 			SetBody(&buf)
 
 		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
+		fmt.Println(resp.Proto() + " " + resp.Status())
+		for k, v := range resp.Header() {
+			fmt.Print(k + ": ")
+			for _, s := range v {
+				fmt.Print(fmt.Sprint(s))
+			}
+			fmt.Print("\n")
+		}
 		if err != nil {
 			fmt.Println("SendJSONCounters error: " + fmt.Sprint(err))
 		} else {
@@ -317,7 +323,11 @@ func decompressGzipResponse(data []byte) ([]byte, error) {
 }
 
 func getAllMetrics(addr *addressurl.AddressURL) *resty.Response {
-	client := resty.New()
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
 	resp, err := client.R().Get(addr.AddrEmpty())
 	if err != nil {
 		fmt.Println(err)
