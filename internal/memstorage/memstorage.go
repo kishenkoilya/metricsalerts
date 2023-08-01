@@ -111,7 +111,11 @@ func (m *MemStorage) GetGauge(nameG string) (float64, bool) {
 func (m *MemStorage) SendGauges(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
-	client := resty.New()
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
 	for metric, value := range m.Gauges {
 		resp, err := client.R().Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
 		if err != nil {
@@ -135,7 +139,11 @@ func (m *MemStorage) SendGauges(addr *addressurl.AddressURL) {
 func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
-	client := resty.New()
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
 	for metric, value := range m.Counters {
 		resp, err := client.R().Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
 		if err != nil {
@@ -159,7 +167,11 @@ func (m *MemStorage) SendCounters(addr *addressurl.AddressURL) {
 func (m *MemStorage) SendJSONGauges(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
-	client := resty.New()
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
 	for metric, value := range m.Gauges {
 		reqBody := Metrics{
 			ID:    metric,
@@ -210,7 +222,11 @@ func (m *MemStorage) SendJSONGauges(addr *addressurl.AddressURL) {
 func (m *MemStorage) SendJSONCounters(addr *addressurl.AddressURL) {
 	m.Mutex.Lock()
 
-	client := resty.New()
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
 	for metric, value := range m.Counters {
 		reqBody := Metrics{
 			ID:    metric,

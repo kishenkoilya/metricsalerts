@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"reflect"
 	"runtime"
 	"sync"
@@ -65,7 +66,11 @@ func getMetric(mType, mName string, addr *addressurl.AddressURL) *resty.Response
 }
 
 func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool) *resty.Response {
-	client := resty.New()
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
 	reqBody := memstorage.Metrics{ID: mName, MType: mType}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
