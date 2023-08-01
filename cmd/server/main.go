@@ -112,16 +112,19 @@ func getPage(storage *memstorage.MemStorage) routing.Handler {
 		body := ""
 
 		statusRes, err := validateValues(mType, mName)
-		if err == nil {
-			statusRes, body = getValue(storage, mType, mName)
-		} else {
-			body = err.Error()
+		if err != nil {
+			sugar.Errorln("validateValues error: ", err.Error())
+			return c.WriteWithStatus([]byte(body), statusRes)
+		}
+		statusRes, body = getValue(storage, mType, mName)
+		if statusRes != http.StatusOK {
+			return c.WriteWithStatus([]byte(body), statusRes)
 		}
 		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
 			gz := gzip.NewWriter(c.Response)
 			defer gz.Close()
 			_, err := gz.Write([]byte(body))
-			return err
+			sugar.Errorln("gzip write failed: ", err.Error())
 		}
 		return c.WriteWithStatus([]byte(body), statusRes)
 	}
@@ -178,7 +181,7 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			gz := gzip.NewWriter(c.Response)
 			defer gz.Close()
 			_, err := gz.Write(respJSON)
-			return err
+			sugar.Errorln("gzip write failed: ", err.Error())
 		}
 		return c.WriteWithStatus(respJSON, statusRes)
 	}
@@ -192,16 +195,20 @@ func updatePage(storage *memstorage.MemStorage) routing.Handler {
 		body := "Update successful"
 
 		statusRes, err := validateValues(mType, mName)
-		if err == nil {
-			statusRes = saveValue(storage, mType, mName, mVal)
-		} else {
-			body = err.Error()
+		if err != nil {
+			sugar.Errorln("validateValues error: ", err.Error())
+			return c.WriteWithStatus([]byte(body), statusRes)
 		}
+		statusRes = saveValue(storage, mType, mName, mVal)
+		if statusRes != http.StatusOK {
+			return c.WriteWithStatus([]byte(body), statusRes)
+		}
+
 		if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
 			gz := gzip.NewWriter(c.Response)
 			defer gz.Close()
 			_, err := gz.Write([]byte(body))
-			return err
+			sugar.Errorln("gzip write failed: ", err.Error())
 		}
 		return c.WriteWithStatus([]byte(body), statusRes)
 	}
@@ -244,7 +251,7 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			gz := gzip.NewWriter(c.Response)
 			defer gz.Close()
 			_, err := gz.Write(respJSON)
-			return err
+			sugar.Errorln("gzip write failed: ", err.Error())
 		}
 		return c.WriteWithStatus(respJSON, statusRes)
 	}
