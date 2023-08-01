@@ -164,13 +164,13 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 
 		statusRes, resp = storage.GetMetrics(req.MType, req.ID)
 		if statusRes != http.StatusOK {
-			sugar.Errorln("storage.GetMetrics failed: ", statusRes)
+			// sugar.Errorln("storage.GetMetrics failed: ", statusRes)
 			return c.WriteWithStatus(nil, statusRes)
 		}
 
 		respJSON, err := json.Marshal(resp)
 		if err != nil {
-			sugar.Errorln("json.Marshal failed: ", err.Error())
+			// sugar.Errorln("json.Marshal failed: ", err.Error())
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusInternalServerError)
 		}
 		return c.WriteWithStatus(respJSON, statusRes)
