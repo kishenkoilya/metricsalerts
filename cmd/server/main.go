@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -73,13 +72,15 @@ func GzipHandle() routing.Handler {
 			return c.Next()
 		}
 		gzippedBuf := new(strings.Builder)
-		gz := gzip.NewWriter(gzippedBuf)
+		gz := gzip.NewWriter(c.Response)
 		defer gz.Close()
 
 		c.Response.Header().Set("Content-Encoding", "gzip")
 
-		c.Response = GzipWriter{c.Response, gz}
-
+		c.Response = &GzipWriter{
+			gzWriter:       gz,
+			ResponseWriter: c.Response,
+		}
 		if err := c.Next(); err != nil {
 			return err
 		}
@@ -92,12 +93,12 @@ func GzipHandle() routing.Handler {
 }
 
 type GzipWriter struct {
+	gzWriter *gzip.Writer
 	http.ResponseWriter
-	Writer io.Writer
 }
 
-func (w GzipWriter) Write(b []byte) (int, error) {
-	return w.Writer.Write(b)
+func (w *GzipWriter) Write(b []byte) (int, error) {
+	return w.gzWriter.Write(b)
 }
 
 func printAllPage(storage *memstorage.MemStorage) routing.Handler {
@@ -147,14 +148,14 @@ func getJSONPage(storage *memstorage.MemStorage) routing.Handler {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
 		}
 
-		for k, v := range c.Request.Header {
-			fmt.Print(k + ": ")
-			for _, s := range v {
-				fmt.Print(fmt.Sprint(s))
-			}
-			fmt.Print("\n")
-		}
-		req.PrintMetrics()
+		// for k, v := range c.Request.Header {
+		// 	fmt.Print(k + ": ")
+		// 	for _, s := range v {
+		// 		fmt.Print(fmt.Sprint(s))
+		// 	}
+		// 	fmt.Print("\n")
+		// }
+		// req.PrintMetrics()
 
 		_, err = validateValues(req.MType, req.ID)
 		resp := &memstorage.Metrics{}
@@ -213,7 +214,7 @@ func updateJSONPage(storage *memstorage.MemStorage) routing.Handler {
 		if err != nil {
 			return c.WriteWithStatus([]byte(err.Error()), http.StatusBadRequest)
 		}
-		req.PrintMetrics()
+		// req.PrintMetrics()
 		mType := req.MType
 		mName := req.ID
 		_, err = validateValues(mType, mName)
@@ -315,8 +316,8 @@ func main() {
 	router := routing.New()
 
 	router.Use(
-		LoggingMiddleware(),
 		GzipHandle(),
+		LoggingMiddleware(),
 		// access.Logger(log.Printf),
 		// slash.Remover(http.StatusMovedPermanently),
 		fault.Recovery(log.Printf),

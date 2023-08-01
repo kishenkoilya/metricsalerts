@@ -60,7 +60,6 @@ func (m *MemStorage) GetMetrics(mType, mName string) (int, *Metrics) {
 	res.MType = mType
 	if mType == "gauge" {
 		val, ok := m.GetGauge(mName)
-		fmt.Println(ok)
 		if ok {
 			res.Value = &val
 		} else {
@@ -68,7 +67,6 @@ func (m *MemStorage) GetMetrics(mType, mName string) (int, *Metrics) {
 		}
 	} else if mType == "counter" {
 		del, ok := m.GetCounter(mName)
-		fmt.Println(ok)
 		if ok {
 			res.Delta = &del
 		} else {
