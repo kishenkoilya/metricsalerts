@@ -121,14 +121,14 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	statusRes, err := validateValues(mType, mName)
 	if err != nil {
 		sugar.Errorln("validateValues error: ", err.Error())
-		w.Write([]byte(body))
-		w.WriteHeader(statusRes)
+		// sugar.Errorln("validateValues error: ", err.Error())
+		http.Error(w, "Error validating type and name", statusRes)
 		return
 	}
 	statusRes, body = getValue(storage, mType, mName)
 	if statusRes != http.StatusOK {
-		w.Write([]byte(body))
-		w.WriteHeader(statusRes)
+		// sugar.Errorln("getValue error: ", err.Error())
+		http.Error(w, "Error getting value", statusRes)
 		return
 	}
 	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
@@ -142,7 +142,6 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// }
 	w.Write([]byte(body))
 	w.WriteHeader(statusRes)
-	return
 }
 
 func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -153,15 +152,16 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 	statusRes, err := validateValues(mType, mName)
 	if err != nil {
-		sugar.Errorln("validateValues error: ", err.Error())
-		w.Write([]byte(body))
-		w.WriteHeader(statusRes)
+		// sugar.Errorln("validateValues error: ", err.Error())
+		http.Error(w, "Error validating type and name", statusRes)
 		return
 	}
+	fmt.Println(mVal)
 	statusRes = saveValue(storage, mType, mName, mVal)
+	fmt.Println(statusRes)
 	if statusRes != http.StatusOK {
-		w.Write([]byte(body))
-		w.WriteHeader(statusRes)
+		// sugar.Errorln("saveValue error: ", err.Error())
+		http.Error(w, "Error parsing value", statusRes)
 		return
 	}
 
@@ -176,7 +176,6 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// }
 	w.Write([]byte(body))
 	w.WriteHeader(statusRes)
-	return
 }
 
 func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -188,9 +187,8 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		var err error
 		reqBody, err = gzip.NewReader(reqBody)
 		if err != nil {
-			sugar.Errorln("gzip.NewReader failed", err.Error())
-			w.Write([]byte(err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
+			// sugar.Errorln("gzip.NewReader failed", err.Error())
+			http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -198,8 +196,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	w.Header().Set("Content-Type", "application/json")
 	err := json.NewDecoder(reqBody).Decode(&req)
 	if err != nil {
-		w.Write([]byte(err.Error()))
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
 
@@ -215,8 +212,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	_, err = validateValues(req.MType, req.ID)
 	resp := &memstorage.Metrics{}
 	if err != nil {
-		w.Write([]byte(err.Error()))
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
 
@@ -230,8 +226,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	respJSON, err := json.Marshal(resp)
 	if err != nil {
 		// sugar.Errorln("json.Marshal failed: ", err.Error())
-		w.Write([]byte(err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
 	}
 	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
@@ -245,8 +240,6 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	// }
 	w.Write(respJSON)
 	w.WriteHeader(statusRes)
-	return
-
 }
 
 func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -259,16 +252,14 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		var err error
 		reqBody, err = gzip.NewReader(reqBody)
 		if err != nil {
-			w.Write([]byte(err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
+			http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
 			return
 		}
 	}
 
 	err := json.NewDecoder(reqBody).Decode(&req)
 	if err != nil {
-		w.Write([]byte(err.Error()))
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
 	// req.PrintMetrics()
@@ -278,15 +269,13 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	if err == nil {
 		statusRes, req = storage.SaveMetrics(req)
 	} else {
-		w.Write([]byte(err.Error()))
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
 
 	respJSON, err := json.Marshal(req)
 	if err != nil {
-		w.Write([]byte(err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
 		return
 	}
 	// if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
@@ -300,7 +289,6 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 
 	w.Write(respJSON)
 	w.WriteHeader(statusRes)
-	return
 }
 
 func validateValues(mType, mName string) (int, error) {

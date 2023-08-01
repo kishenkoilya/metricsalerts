@@ -375,7 +375,7 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				// fmt.Println("Updating metrics")
+				fmt.Println("Updating metrics")
 				err := updateMetrics(&m, metrics, storage)
 				if err != nil {
 					panic(err)
@@ -396,6 +396,18 @@ func main() {
 			case <-ticker.C:
 				// fmt.Println("Sending metrics")
 				sendMetrics(storage, &addr)
+				// client := resty.New()
+				// resp, _ := client.R().Post(addr.AddrCommand("update", "counter", "testCounter", "none"))
+				// fmt.Println(resp.Proto() + " " + resp.Status())
+				// for k, v := range resp.Header() {
+				// 	fmt.Print(k + ": ")
+				// 	for _, s := range v {
+				// 		fmt.Print(fmt.Sprint(s))
+				// 	}
+				// 	fmt.Print("\n")
+				// }
+				// fmt.Println(string(resp.Body()))
+
 				// resp := getAllMetrics(&addr)
 				// fmt.Println(string(resp.Body()))
 
