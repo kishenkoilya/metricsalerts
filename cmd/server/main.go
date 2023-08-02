@@ -378,13 +378,13 @@ func getVars() (string, int, string, bool) {
 	if cfg.Address != "" {
 		addr = &cfg.Address
 	}
-	if _, err := os.LookupEnv("STORE_INTERVAL"); err == true {
+	if _, err := os.LookupEnv("STORE_INTERVAL"); err {
 		storeInterval = &cfg.StoreInterval
 	}
 	if cfg.FilePath != "" {
 		filePath = &cfg.FilePath
 	}
-	if _, err := os.LookupEnv("RESTORE"); err == true {
+	if _, err := os.LookupEnv("RESTORE"); err {
 		restore = &cfg.Restore
 	}
 	return *addr, *storeInterval, *filePath, *restore
@@ -478,7 +478,7 @@ func waitForShutdown(server *http.Server, filePath string) {
 	if err != nil {
 		sugar.Fatalw(err.Error(), "event", "init file writer")
 	}
-	err = server.Shutdown(nil)
+	err = server.Shutdown(context.TODO())
 	if err != nil {
 		sugar.Errorf("Ошибка при остановке HTTP-сервера: %v\n", err)
 	}
