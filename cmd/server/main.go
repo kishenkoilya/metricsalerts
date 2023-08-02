@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -9,21 +10,30 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/julienschmidt/httprouter"
+	"github.com/kishenkoilya/metricsalerts/internal/filerw"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 	"go.uber.org/zap"
 )
 
 var storage *memstorage.MemStorage
 var sugar zap.SugaredLogger
+var syncFileWriter *filerw.Producer
 
 type Config struct {
-	Address string `env:"ADDRESS"`
+	Address       string `env:"ADDRESS"`
+	StoreInterval int    `env:"STORE_INTERVAL"`
+	FilePath      string `env:"FILE_STORAGE_PATH"`
+	Restore       bool   `env:"RESTORE"`
 }
 
 func LoggingMiddleware(next httprouter.Handle) httprouter.Handle {
@@ -326,6 +336,9 @@ func saveValue(storage *memstorage.MemStorage, mType, mName, mVal string) int {
 		}
 		storage.PutGauge(mName, res)
 	}
+	if syncFileWriter != nil {
+		syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
+	}
 	return http.StatusOK
 }
 
@@ -348,11 +361,16 @@ func getValue(storage *memstorage.MemStorage, mType, mName string) (int, string)
 	return status, res
 }
 
-func getVars() string {
+func getVars() (string, int, string, bool) {
 	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
+	storeInterval := flag.Int("i", 300, "A time interval for storing metrics in file")
+	filePath := flag.String("f", "/tmp/metrics-db.json", "Path to file where metrics will be stored")
+	restore := flag.Bool("r", true, "A flag that determines wether server will download metrics from file upon start")
+
 	flag.Parse()
 
 	var cfg Config
+
 	error := env.Parse(&cfg)
 	if error != nil {
 		log.Fatal(error)
@@ -360,10 +378,20 @@ func getVars() string {
 	if cfg.Address != "" {
 		addr = &cfg.Address
 	}
-	return *addr
+	if _, err := os.LookupEnv("STORE_INTERVAL"); err == true {
+		storeInterval = &cfg.StoreInterval
+	}
+	if cfg.FilePath != "" {
+		filePath = &cfg.FilePath
+	}
+	if _, err := os.LookupEnv("RESTORE"); err == true {
+		restore = &cfg.Restore
+	}
+	return *addr, *storeInterval, *filePath, *restore
 }
 
 func main() {
+	ctx := context.Background()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		// вызываем панику, если ошибка
@@ -374,9 +402,20 @@ func main() {
 	// делаем регистратор SugaredLogger
 	sugar = *logger.Sugar()
 
-	addr := getVars()
-
+	addr, storeInterval, filePath, restore := getVars()
+	fmt.Println(addr, storeInterval, filePath, restore)
 	storage = memstorage.NewMemStorage()
+	if restore {
+		_, err := os.Open(filePath)
+		if err == nil {
+			consumer, err := filerw.NewConsumer(filePath)
+			if err == nil {
+				storage, _ = consumer.ReadMemStorage()
+				fmt.Println(storage.PrintAll())
+			}
+		}
+	}
+
 	router := httprouter.New()
 	router.GET("/", LoggingMiddleware(GzipMiddleware(printAllPage)))
 	router.GET("/value/:mType/:mName", LoggingMiddleware(GzipMiddleware(getPage)))
@@ -384,8 +423,68 @@ func main() {
 	router.POST("/value/", LoggingMiddleware(GzipMiddleware(getJSONPage)))
 	router.POST("/update/", LoggingMiddleware(GzipMiddleware(updateJSONPage)))
 
-	err = http.ListenAndServe(addr, router)
-	if err != nil {
-		sugar.Fatalw(err.Error(), "event", "start server")
+	server := &http.Server{
+		Addr:    addr,
+		Handler: router,
 	}
+	go func() {
+		err = server.ListenAndServe()
+		if err != nil {
+			sugar.Fatalw(err.Error(), "event", "start server")
+		}
+	}()
+	if storeInterval == 0 {
+		syncFileWriter, err = filerw.NewProducer(filePath, false)
+		if err != nil {
+			sugar.Fatalw(err.Error(), "event", "init file writer")
+		}
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(10)
+		go func() {
+			defer wg.Done()
+			ticker := time.NewTicker(time.Duration(storeInterval) * time.Second)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					fmt.Println("Saving to storage")
+					producer, err := filerw.NewProducer(filePath, true)
+					if err != nil {
+						sugar.Fatalw(err.Error(), "event", "init file writer")
+					}
+					err = producer.WriteMemStorage(storage)
+					if err != nil {
+						panic(err)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		wg.Wait()
+	}
+	waitForShutdown(server, filePath)
+	fmt.Println("Программа завершена")
+}
+
+func waitForShutdown(server *http.Server, filePath string) {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	<-signalChan
+	producer, err := filerw.NewProducer(filePath, true)
+	if err != nil {
+		sugar.Fatalw(err.Error(), "event", "init file writer")
+	}
+	err = server.Shutdown(nil)
+	if err != nil {
+		sugar.Errorf("Ошибка при остановке HTTP-сервера: %v\n", err)
+	}
+	err = producer.WriteMemStorage(storage)
+	if err != nil {
+		sugar.Errorln(err.Error())
+	}
+	fmt.Println("HTTP-сервер остановлен.")
 }
