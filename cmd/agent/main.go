@@ -34,7 +34,7 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 	for _, metricName := range metrics {
 		value := reflect.ValueOf(*m).FieldByName(metricName)
 		if value.IsValid() {
-			// fmt.Println("Metric " + metricName + " equals " + value.String())
+			// fmt.Println("Metric " + metricName + " equals " + fmt.Sprint(value) + " CanFloat: " + fmt.Sprint(value.CanFloat()) + " CanInt: " + fmt.Sprint(value.CanInt()) + " CanUint: " + fmt.Sprint(value.CanUint()))
 			if value.CanFloat() {
 				storage.PutGauge(metricName, value.Float())
 			} else if value.CanUint() {
@@ -50,168 +50,31 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 	return nil
 }
 
-func sendMetrics(storage *memstorage.MemStorage, addr *addressurl.AddressURL) {
-	// SendJSONGauges(addr, storage)
-	// SendJSONCounters(addr, storage)
-	SendGauges(addr, storage)
-	SendCounters(addr, storage)
-}
-
-func SendGauges(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+func SendMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
 	storage.Mutex.Lock()
-	client := resty.NewWithClient(&http.Client{
-		Transport: &http.Transport{
-			DisableCompression: true,
-		},
-	})
-	for metric, value := range storage.Gauges {
-		cli := client.R()
-		resp, err := cli.Post(addr.AddrCommand("update", "gauge", metric, fmt.Sprint(value)))
-		fmt.Println(cli.RawRequest.URL)
-		if err != nil {
-			fmt.Println("SendGauges error: " + fmt.Sprint(err))
-		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
-			fmt.Println(string(resp.Body()))
-		}
-	}
+	counters := storage.Counters
+	gauges := storage.Gauges
 	storage.Mutex.Unlock()
-}
-
-func SendCounters(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-	storage.Mutex.Lock()
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
 		},
 	})
-	for metric, value := range storage.Counters {
-		cli := client.R()
-		resp, err := cli.Post(addr.AddrCommand("update", "counter", metric, fmt.Sprint(value)))
-		fmt.Println(cli.RawRequest.URL)
-		if err != nil {
-			fmt.Println("SendCounters error: " + fmt.Sprint(err))
-		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
-			fmt.Println(string(resp.Body()))
-		}
+	for metric, value := range counters {
+		sendMetric(client, addr, metric, "counter", fmt.Sprint(value))
 	}
-	storage.Mutex.Unlock()
-}
-
-func SendJSONGauges(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-	storage.Mutex.Lock()
-
-	client := resty.NewWithClient(&http.Client{
-		Transport: &http.Transport{
-			DisableCompression: true,
-		},
-	})
-	for metric, value := range storage.Gauges {
-		reqBody := memstorage.Metrics{
-			ID:    metric,
-			MType: "gauge",
-			Value: &value,
-		}
-
-		jsonData, err := json.Marshal(reqBody)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		var buf bytes.Buffer
-		gzipWriter := gzip.NewWriter(&buf)
-		_, err = gzipWriter.Write(jsonData)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		gzipWriter.Close()
-
-		request := client.R().
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Content-Encoding", "gzip").
-			SetHeader("Accept-Encoding", "gzip").
-			SetBody(&buf)
-
-		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
-		if err != nil {
-			fmt.Println("SendJSONGauges error: " + fmt.Sprint(err))
-		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
-		}
-		fmt.Println(string(resp.Body()))
-		// if strings.Contains(resp.Header().Get("Content-Encoding"), "gzip") {
-		// 	responseData, err := decompressGzipResponse(resp.Body())
-		// 	if err != nil {
-		// 		fmt.Println("Error decompressing response:", err.Error())
-		// 	}
-		// 	fmt.Println(string(responseData))
-		// }
+	for metric, value := range gauges {
+		sendMetric(client, addr, metric, "gauge", fmt.Sprint(value))
 	}
-
-	storage.Mutex.Unlock()
 }
 
-func SendJSONCounters(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-	storage.Mutex.Lock()
-
-	client := resty.NewWithClient(&http.Client{
-		Transport: &http.Transport{
-			DisableCompression: true,
-		},
-	})
-	for metric, value := range storage.Counters {
-		reqBody := memstorage.Metrics{
-			ID:    metric,
-			MType: "counter",
-			Delta: &value,
-		}
-
-		jsonData, err := json.Marshal(reqBody)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		var buf bytes.Buffer
-		gzipWriter := gzip.NewWriter(&buf)
-		_, err = gzipWriter.Write(jsonData)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		gzipWriter.Close()
-
-		request := client.R().
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Content-Encoding", "gzip").
-			SetHeader("Accept-Encoding", "gzip").
-			SetBody(&buf)
-
-		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
+func sendMetric(client *resty.Client, addr *addressurl.AddressURL, metric, mType, value string) {
+	cli := client.R()
+	resp, err := cli.Post(addr.AddrCommand("update", mType, metric, fmt.Sprint(value)))
+	fmt.Println(cli.RawRequest.URL)
+	if err != nil {
+		fmt.Println("SendCounters error: " + fmt.Sprint(err))
+	} else {
 		fmt.Println(resp.Proto() + " " + resp.Status())
 		for k, v := range resp.Header() {
 			fmt.Print(k + ": ")
@@ -220,21 +83,91 @@ func SendJSONCounters(addr *addressurl.AddressURL, storage *memstorage.MemStorag
 			}
 			fmt.Print("\n")
 		}
-		if err != nil {
-			fmt.Println("SendJSONCounters error: " + fmt.Sprint(err))
-		} else {
-			fmt.Println(resp.Proto() + " " + resp.Status())
-			for k, v := range resp.Header() {
-				fmt.Print(k + ": ")
-				for _, s := range v {
-					fmt.Print(fmt.Sprint(s))
-				}
-				fmt.Print("\n")
-			}
-		}
 		fmt.Println(string(resp.Body()))
 	}
+}
+
+func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+	storage.Mutex.Lock()
+	counters := storage.Counters
+	gauges := storage.Gauges
 	storage.Mutex.Unlock()
+
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
+	for metric, value := range counters {
+		sendJSONMetric(client, addr, metric, &value, nil)
+	}
+	for metric, value := range gauges {
+		sendJSONMetric(client, addr, metric, nil, &value)
+	}
+}
+
+func sendJSONMetric(client *resty.Client, addr *addressurl.AddressURL, metric string, counter *int64, gauge *float64) {
+	reqBody := memstorage.Metrics{
+		ID: metric,
+	}
+	if counter == nil {
+		reqBody.MType = "gauge"
+		reqBody.Value = gauge
+	} else {
+		reqBody.MType = "counter"
+		reqBody.Delta = counter
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
+	_, err = gzipWriter.Write(jsonData)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	gzipWriter.Close()
+
+	request := client.R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
+		SetHeader("Accept-Encoding", "gzip").
+		SetBody(&buf)
+
+	resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
+	fmt.Println(resp.Proto() + " " + resp.Status())
+	for k, v := range resp.Header() {
+		fmt.Print(k + ": ")
+		for _, s := range v {
+			fmt.Print(fmt.Sprint(s))
+		}
+		fmt.Print("\n")
+	}
+	if err != nil {
+		fmt.Println("SendJSONMetrics error: " + fmt.Sprint(err))
+	} else {
+		fmt.Println(resp.Proto() + " " + resp.Status())
+		for k, v := range resp.Header() {
+			fmt.Print(k + ": ")
+			for _, s := range v {
+				fmt.Print(fmt.Sprint(s))
+			}
+			fmt.Print("\n")
+		}
+	}
+	fmt.Println(string(resp.Body()))
+	// if strings.Contains(resp.Header().Get("Content-Encoding"), "gzip") {
+	// 	responseData, err := decompressGzipResponse(resp.Body())
+	// 	if err != nil {
+	// 		fmt.Println("Error decompressing response:", err.Error())
+	// 	}
+	// 	fmt.Println(string(responseData))
+	// }
 }
 
 func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool) *resty.Response {
@@ -389,7 +322,7 @@ func main() {
 			select {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
-				sendMetrics(storage, &addr)
+				SendMetrics(&addr, storage)
 				// resp := getAllMetrics(&addr)
 				// fmt.Println(string(resp.Body()))
 				// fmt.Println("all metr")

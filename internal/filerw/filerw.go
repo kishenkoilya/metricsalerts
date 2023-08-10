@@ -32,10 +32,8 @@ func NewProducer(filename string, trunc bool) (*Producer, error) {
 	var file *os.File
 	var err error
 	if trunc {
-		fmt.Println(trunc)
 		file, err = os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND|os.O_TRUNC, 0666)
 	} else {
-		fmt.Println(trunc)
 		file, err = os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	}
 	if err != nil {
