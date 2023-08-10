@@ -323,6 +323,22 @@ func main() {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
 				SendMetrics(&addr, storage)
+				// client := resty.New().R()
+				// resp, err := client.Get(addr.AddrCommand("ping", "", "", ""))
+				// if err != nil {
+				// 	fmt.Println(err.Error())
+				// }
+				// fmt.Println(client.URL)
+				// fmt.Println(string(resp.Body()))
+				// // fmt.Println(client.RawRequest.URL)
+				// fmt.Println(resp.Proto() + " " + resp.Status())
+				// for k, v := range resp.Header() {
+				// 	fmt.Print(k + ": ")
+				// 	for _, s := range v {
+				// 		fmt.Print(fmt.Sprint(s))
+				// 	}
+				// 	fmt.Print("\n")
+				// }
 				// resp := getAllMetrics(&addr)
 				// fmt.Println(string(resp.Body()))
 				// fmt.Println("all metr")

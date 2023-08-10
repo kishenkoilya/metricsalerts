@@ -3,7 +3,6 @@ package main
 import (
 	"compress/gzip"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -20,7 +19,8 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v6"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx"
+	_ "github.com/jackc/pgx/v5"
 	"github.com/julienschmidt/httprouter"
 	"github.com/kishenkoilya/metricsalerts/internal/filerw"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
@@ -45,7 +45,7 @@ type HandlerVars struct {
 
 func ParamsMiddleware(next httprouter.Handle, handlerVars *HandlerVars) httprouter.Handle {
 	return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		ctx := context.WithValue(r.Context(), "vars", handlerVars)
+		ctx := context.WithValue(r.Context(), HandlerVars{}, handlerVars)
 		next(w, r.WithContext(ctx), ps)
 	})
 }
@@ -127,7 +127,7 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 }
 
 func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("vars").(*HandlerVars)
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("printAllPage")
 	path := strings.Trim(r.URL.Path, "/")
 	if path != "" {
@@ -140,7 +140,7 @@ func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 }
 
 func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("vars").(*HandlerVars)
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("getPage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
@@ -173,18 +173,25 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func pingPostgrePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("vars").(*HandlerVars)
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("pingPostgrePage")
-	db, err := sql.Open("pgx", *handlerVars.psqlConnectLine)
+	// sugar.Infoln(*handlerVars.psqlConnectLine)
+	connConfig, err := pgx.ParseConnectionString(*handlerVars.psqlConnectLine)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	db, err := pgx.Connect(connConfig)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	defer db.Close()
 	w.WriteHeader(http.StatusOK)
 }
 
 func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("vars").(*HandlerVars)
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("updatePage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
@@ -218,7 +225,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("vars").(*HandlerVars)
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("getJSONPage")
 	var statusRes int
 	var req memstorage.Metrics
@@ -284,7 +291,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("vars").(*HandlerVars)
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("updateJSONPage")
 	var statusRes int
 	var req *memstorage.Metrics
