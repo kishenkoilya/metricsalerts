@@ -34,7 +34,7 @@ type Config struct {
 	StoreInterval int    `env:"STORE_INTERVAL"`
 	FilePath      string `env:"FILE_STORAGE_PATH"`
 	Restore       bool   `env:"RESTORE"`
-	Database_DSN  string `env:"DATABASE_DSN"`
+	DatabaseDSN   string `env:"DATABASE_DSN"`
 }
 
 type HandlerVars struct {
@@ -45,7 +45,7 @@ type HandlerVars struct {
 
 func ParamsMiddleware(next httprouter.Handle, handlerVars *HandlerVars) httprouter.Handle {
 	return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		ctx := context.WithValue(r.Context(), "handlerVars", handlerVars)
+		ctx := context.WithValue(r.Context(), "vars", handlerVars)
 		next(w, r.WithContext(ctx), ps)
 	})
 }
@@ -127,7 +127,7 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 }
 
 func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("handlerVars").(HandlerVars)
+	handlerVars := r.Context().Value("vars").(*HandlerVars)
 	sugar.Infoln("printAllPage")
 	path := strings.Trim(r.URL.Path, "/")
 	if path != "" {
@@ -140,7 +140,7 @@ func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 }
 
 func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("handlerVars").(HandlerVars)
+	handlerVars := r.Context().Value("vars").(*HandlerVars)
 	sugar.Infoln("getPage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
@@ -173,7 +173,7 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func pingPostgrePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("handlerVars").(HandlerVars)
+	handlerVars := r.Context().Value("vars").(*HandlerVars)
 	sugar.Infoln("pingPostgrePage")
 	db, err := sql.Open("pgx", *handlerVars.psqlConnectLine)
 	if err != nil {
@@ -184,7 +184,7 @@ func pingPostgrePage(w http.ResponseWriter, r *http.Request, ps httprouter.Param
 }
 
 func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("handlerVars").(HandlerVars)
+	handlerVars := r.Context().Value("vars").(*HandlerVars)
 	sugar.Infoln("updatePage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
@@ -218,7 +218,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("handlerVars").(HandlerVars)
+	handlerVars := r.Context().Value("vars").(*HandlerVars)
 	sugar.Infoln("getJSONPage")
 	var statusRes int
 	var req memstorage.Metrics
@@ -284,7 +284,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	handlerVars := r.Context().Value("handlerVars").(HandlerVars)
+	handlerVars := r.Context().Value("vars").(*HandlerVars)
 	sugar.Infoln("updateJSONPage")
 	var statusRes int
 	var req *memstorage.Metrics
@@ -418,8 +418,8 @@ func getVars() (string, int, string, bool, string) {
 	if _, err := os.LookupEnv("RESTORE"); err {
 		restore = &cfg.Restore
 	}
-	if cfg.Database_DSN != "" {
-		psqlLine = &cfg.Database_DSN
+	if cfg.DatabaseDSN != "" {
+		psqlLine = &cfg.DatabaseDSN
 	}
 	return *addr, *storeInterval, *filePath, *restore, *psqlLine
 }
