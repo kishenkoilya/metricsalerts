@@ -461,9 +461,7 @@ func main() {
 			}
 		} else {
 			storage, err := db.ReadMemStorage()
-			if err != nil {
-				sugar.Fatalw(err.Error(), "event", "Read storage from db")
-			} else {
+			if err == nil {
 				fmt.Println(storage.PrintAll())
 			}
 		}
