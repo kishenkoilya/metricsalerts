@@ -463,6 +463,12 @@ func main() {
 			storage, err := db.ReadMemStorage()
 			if err == nil {
 				fmt.Println(storage.PrintAll())
+			} else {
+				consumer, err := filerw.NewConsumer(filePath)
+				if err == nil {
+					storage, _ = consumer.ReadMemStorage()
+					fmt.Println(storage.PrintAll())
+				}
 			}
 		}
 	}
