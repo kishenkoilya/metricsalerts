@@ -97,11 +97,11 @@ func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
 	storage := memstorage.NewMemStorage()
 	query := `
 		SELECT name, value 
-		FROM gauges g 
+		FROM gauges
 		WHERE id IN (
 			SELECT MAX(id)
-			FROM data
-			WHERE name = g.name
+			FROM gauges
+			WHERE name = gauges.name
 			GROUP BY name
 		)
 	`
@@ -122,11 +122,11 @@ func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
 
 	query = `
 		SELECT name, value 
-		FROM counters g 
+		FROM counters 
 		WHERE id IN (
 			SELECT MAX(id)
-			FROM data
-			WHERE name = g.name
+			FROM counters
+			WHERE name = counters.name
 			GROUP BY name
 		)
 	`

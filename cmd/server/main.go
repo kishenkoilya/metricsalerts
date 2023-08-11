@@ -452,20 +452,25 @@ func main() {
 	fmt.Println(addr, storeInterval, filePath, restore)
 	storage := memstorage.NewMemStorage()
 	if restore {
-		_, err := os.Open(filePath)
-		if err == nil {
-			fmt.Println(filePath)
+		db, err := psqlinteraction.NewDBConnection(psqlLine)
+		if err != nil {
 			consumer, err := filerw.NewConsumer(filePath)
 			if err == nil {
-				fmt.Println(storage.PrintAll())
 				storage, _ = consumer.ReadMemStorage()
+				fmt.Println(storage.PrintAll())
+			}
+		} else {
+			storage, err := db.ReadMemStorage()
+			if err != nil {
+				sugar.Fatalw(err.Error(), "event", "Read storage from db")
+			} else {
 				fmt.Println(storage.PrintAll())
 			}
 		}
 	}
 	syncFileWriter, err := filerw.NewProducer(filePath, false)
 	if err != nil {
-		sugar.Fatalw(err.Error(), "event", "init file writer")
+		sugar.Fatalw(err.Error(), "event", "Init file writer")
 	}
 
 	// psqlLine = "host=localhost port=5432 user=postgres password=gpadmin dbname=postgres"
