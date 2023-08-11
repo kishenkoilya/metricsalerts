@@ -342,12 +342,10 @@ func validateValues(mType, mName string) (int, error) {
 	}
 	_, err := strconv.ParseInt(mName, 0, 64)
 	if err == nil {
-		fmt.Println(err.Error())
 		return http.StatusBadRequest, err
 	}
 	_, err = strconv.ParseFloat(mName, 64)
 	if err == nil {
-		fmt.Println(err.Error())
 		return http.StatusBadRequest, err
 	}
 
