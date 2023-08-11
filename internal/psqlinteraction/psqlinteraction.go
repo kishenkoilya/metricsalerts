@@ -59,7 +59,7 @@ func (db *DBConnection) InitTables() error {
 func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) error {
 	query := `INSERT INTO counters (name, value) VALUES ($1, $2)`
 	for k, v := range storage.Counters {
-		res, err := db.conn.Exec(query, "counters", k, v)
+		res, err := db.conn.Exec(query, k, v)
 		if err != nil {
 			return err
 		}
@@ -67,7 +67,7 @@ func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) error {
 	}
 	query = `INSERT INTO gauges (name, value) VALUES ($1, $2)`
 	for k, v := range storage.Gauges {
-		res, err := db.conn.Exec(query, "gauges", k, v)
+		res, err := db.conn.Exec(query, k, v)
 		if err != nil {
 			return err
 		}
