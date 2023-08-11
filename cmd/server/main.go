@@ -342,10 +342,12 @@ func validateValues(mType, mName string) (int, error) {
 	}
 	_, err := strconv.ParseInt(mName, 0, 64)
 	if err == nil {
+		fmt.Println(err.Error())
 		return http.StatusBadRequest, err
 	}
 	_, err = strconv.ParseFloat(mName, 64)
 	if err == nil {
+		fmt.Println(err.Error())
 		return http.StatusBadRequest, err
 	}
 
@@ -356,28 +358,30 @@ func saveValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 	if mType == "counter" {
 		res, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {
+			fmt.Println(err.Error())
 			return http.StatusBadRequest
 		}
 		handlerVars.storage.PutCounter(mName, res)
 	} else if mType == "gauge" {
 		res, err := strconv.ParseFloat(mVal, 64)
 		if err != nil {
+			fmt.Println(err.Error())
 			return http.StatusBadRequest
 		}
 		handlerVars.storage.PutGauge(mName, res)
 	}
-	sugar.Infoln(fmt.Sprint(handlerVars.db))
-	sugar.Infoln(fmt.Sprint(handlerVars.syncFileWriter))
 	if handlerVars.db != nil {
 		sugar.Infoln("Writing metric to db")
 		err := handlerVars.db.WriteMetric(mType, mName, mVal)
 		if err != nil {
+			fmt.Println(err.Error())
 			return http.StatusInternalServerError
 		}
 	} else if handlerVars.syncFileWriter != nil {
 		sugar.Infoln("Writing metric to file")
 		err := handlerVars.syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
 		if err != nil {
+			fmt.Println(err.Error())
 			return http.StatusInternalServerError
 		}
 	}
