@@ -123,7 +123,7 @@ func Test_saveValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := saveValue(tt.args.storage, nil, tt.args.mType, tt.args.mName, tt.args.mVal); got != tt.want {
+			if got := saveValue(&HandlerVars{storage: tt.args.storage}, tt.args.mType, tt.args.mName, tt.args.mVal); got != tt.want {
 				t.Errorf("saveValues() = %v, want %v", got, tt.want)
 			}
 		})

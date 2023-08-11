@@ -19,11 +19,10 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v6"
-	"github.com/jackc/pgx"
-	_ "github.com/jackc/pgx/v5"
 	"github.com/julienschmidt/httprouter"
 	"github.com/kishenkoilya/metricsalerts/internal/filerw"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
+	"github.com/kishenkoilya/metricsalerts/internal/psqlinteraction"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +40,7 @@ type HandlerVars struct {
 	storage         *memstorage.MemStorage
 	syncFileWriter  *filerw.Producer
 	psqlConnectLine *string
+	db              *psqlinteraction.DBConnection
 }
 
 func ParamsMiddleware(next httprouter.Handle, handlerVars *HandlerVars) httprouter.Handle {
@@ -175,18 +175,11 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 func pingPostgrePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("pingPostgrePage")
-	// sugar.Infoln(*handlerVars.psqlConnectLine)
-	connConfig, err := pgx.ParseConnectionString(*handlerVars.psqlConnectLine)
+	err := psqlinteraction.PingPSQL(*handlerVars.psqlConnectLine)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	db, err := pgx.Connect(connConfig)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -204,7 +197,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error validating type and name", statusRes)
 		return
 	}
-	statusRes = saveValue(handlerVars.storage, handlerVars.syncFileWriter, mType, mName, mVal)
+	statusRes = saveValue(handlerVars, mType, mName, mVal)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("saveValue error: ", err.Error())
 		http.Error(w, "Error parsing value", statusRes)
@@ -359,22 +352,23 @@ func validateValues(mType, mName string) (int, error) {
 	return http.StatusOK, nil
 }
 
-func saveValue(storage *memstorage.MemStorage, syncFileWriter *filerw.Producer, mType, mName, mVal string) int {
+func saveValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 	if mType == "counter" {
 		res, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {
 			return http.StatusBadRequest
 		}
-		storage.PutCounter(mName, res)
+		handlerVars.storage.PutCounter(mName, res)
 	} else if mType == "gauge" {
 		res, err := strconv.ParseFloat(mVal, 64)
 		if err != nil {
 			return http.StatusBadRequest
 		}
-		storage.PutGauge(mName, res)
+		handlerVars.storage.PutGauge(mName, res)
 	}
-	if syncFileWriter != nil {
-		syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
+
+	if handlerVars.syncFileWriter != nil {
+		handlerVars.syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
 	}
 	return http.StatusOK
 }
@@ -435,12 +429,10 @@ func main() {
 	ctx := context.Background()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		// вызываем панику, если ошибка
 		panic(err)
 	}
 	defer logger.Sync()
 
-	// делаем регистратор SugaredLogger
 	sugar = *logger.Sugar()
 
 	addr, storeInterval, filePath, restore, psqlLine := getVars()
@@ -462,20 +454,30 @@ func main() {
 	}
 
 	// psqlLine = "host=localhost port=5432 user=postgres password=gpadmin dbname=postgres"
-
-	handlerVars := HandlerVars{
-		storage:         storage,
-		syncFileWriter:  syncFileWriter,
-		psqlConnectLine: &psqlLine,
+	var handlerVars *HandlerVars
+	if db, err := psqlinteraction.NewDBConnection(psqlLine); err != nil || storeInterval != 0 {
+		handlerVars = &HandlerVars{
+			storage:         storage,
+			syncFileWriter:  syncFileWriter,
+			psqlConnectLine: &psqlLine,
+			db:              nil,
+		}
+	} else {
+		handlerVars = &HandlerVars{
+			storage:         storage,
+			syncFileWriter:  syncFileWriter,
+			psqlConnectLine: &psqlLine,
+			db:              db,
+		}
 	}
 
 	router := httprouter.New()
-	router.GET("/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(printAllPage, &handlerVars))))
-	router.GET("/value/:mType/:mName", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(getPage, &handlerVars))))
-	router.GET("/ping", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(pingPostgrePage, &handlerVars))))
-	router.POST("/update/:mType/:mName/:mVal", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updatePage, &handlerVars))))
-	router.POST("/value/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(getJSONPage, &handlerVars))))
-	router.POST("/update/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updateJSONPage, &handlerVars))))
+	router.GET("/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(printAllPage, handlerVars))))
+	router.GET("/value/:mType/:mName", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(getPage, handlerVars))))
+	router.GET("/ping", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(pingPostgrePage, handlerVars))))
+	router.POST("/update/:mType/:mName/:mVal", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updatePage, handlerVars))))
+	router.POST("/value/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(getJSONPage, handlerVars))))
+	router.POST("/update/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updateJSONPage, handlerVars))))
 
 	server := &http.Server{
 		Addr:    addr,
@@ -489,6 +491,7 @@ func main() {
 	}()
 
 	if storeInterval != 0 {
+		syncFileWriter.Close()
 		var wg sync.WaitGroup
 		wg.Add(10)
 		go func() {
@@ -500,13 +503,20 @@ func main() {
 				select {
 				case <-ticker.C:
 					fmt.Println("Saving to storage")
-					producer, err := filerw.NewProducer(filePath, true)
-					if err != nil {
-						sugar.Fatalw(err.Error(), "event", "init file writer")
-					}
-					err = producer.WriteMemStorage(storage)
-					if err != nil {
-						panic(err)
+					if db, err := psqlinteraction.NewDBConnection(psqlLine); err != nil {
+						producer, err := filerw.NewProducer(filePath, true)
+						if err != nil {
+							sugar.Fatalw(err.Error(), "event", "init file writer")
+						}
+						err = producer.WriteMemStorage(storage)
+						if err != nil {
+							panic(err)
+						}
+					} else {
+						err = db.WriteMemStorage(storage)
+						if err != nil {
+							panic(err)
+						}
 					}
 				case <-ctx.Done():
 					return
@@ -515,26 +525,33 @@ func main() {
 		}()
 		wg.Wait()
 	}
-	waitForShutdown(server, storage, filePath)
+	waitForShutdown(server, handlerVars, filePath)
 	fmt.Println("Программа завершена")
 }
 
-func waitForShutdown(server *http.Server, storage *memstorage.MemStorage, filePath string) {
+func waitForShutdown(server *http.Server, handlerVars *HandlerVars, filePath string) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-signalChan
-	producer, err := filerw.NewProducer(filePath, true)
-	if err != nil {
-		sugar.Fatalw(err.Error(), "event", "init file writer")
-	}
-	err = server.Shutdown(context.TODO())
-	if err != nil {
-		sugar.Errorf("Ошибка при остановке HTTP-сервера: %v\n", err)
-	}
-	err = producer.WriteMemStorage(storage)
-	if err != nil {
-		sugar.Errorln(err.Error())
+	if db, err := psqlinteraction.NewDBConnection(*handlerVars.psqlConnectLine); err != nil {
+		producer, err := filerw.NewProducer(filePath, true)
+		if err != nil {
+			sugar.Fatalw(err.Error(), "event", "init file writer")
+		}
+		err = server.Shutdown(context.TODO())
+		if err != nil {
+			sugar.Errorf("Ошибка при остановке HTTP-сервера: %v\n", err)
+		}
+		err = producer.WriteMemStorage(handlerVars.storage)
+		if err != nil {
+			sugar.Errorln(err.Error())
+		}
+	} else {
+		err = db.WriteMemStorage(handlerVars.storage)
+		if err != nil {
+			panic(err)
+		}
 	}
 	fmt.Println("HTTP-сервер остановлен.")
 }
