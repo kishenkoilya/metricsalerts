@@ -366,12 +366,16 @@ func saveValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 		}
 		handlerVars.storage.PutGauge(mName, res)
 	}
+	sugar.Infoln(fmt.Sprint(handlerVars.db))
+	sugar.Infoln(fmt.Sprint(handlerVars.syncFileWriter))
 	if handlerVars.db != nil {
+		sugar.Infoln("Writing metric to db")
 		err := handlerVars.db.WriteMetric(mType, mName, mVal)
 		if err != nil {
 			return http.StatusInternalServerError
 		}
 	} else if handlerVars.syncFileWriter != nil {
+		sugar.Infoln("Writing metric to file")
 		err := handlerVars.syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
 		if err != nil {
 			return http.StatusInternalServerError
@@ -448,8 +452,10 @@ func main() {
 	if restore {
 		_, err := os.Open(filePath)
 		if err == nil {
+			fmt.Println(filePath)
 			consumer, err := filerw.NewConsumer(filePath)
 			if err == nil {
+				fmt.Println(storage.PrintAll())
 				storage, _ = consumer.ReadMemStorage()
 				fmt.Println(storage.PrintAll())
 			}
@@ -505,7 +511,6 @@ func main() {
 	}()
 
 	if storeInterval != 0 {
-		syncFileWriter.Close()
 		var wg sync.WaitGroup
 		wg.Add(10)
 		go func() {
