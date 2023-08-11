@@ -57,7 +57,7 @@ func (db *DBConnection) InitTables() error {
 }
 
 func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) error {
-	query := `INSERT INTO $1 (name, value) VALUES ($2, $3)`
+	query := `INSERT INTO counters (name, value) VALUES ($1, $2)`
 	for k, v := range storage.Counters {
 		res, err := db.conn.Exec(query, "counters", k, v)
 		if err != nil {
@@ -65,6 +65,7 @@ func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) error {
 		}
 		fmt.Println(res)
 	}
+	query = `INSERT INTO gauges (name, value) VALUES ($1, $2)`
 	for k, v := range storage.Gauges {
 		res, err := db.conn.Exec(query, "gauges", k, v)
 		if err != nil {
@@ -73,6 +74,22 @@ func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) error {
 		fmt.Println(res)
 	}
 	db.Close()
+	return nil
+}
+
+func (db *DBConnection) WriteMetric(mType, mName, mVal string) error {
+	var query string
+	if mType == "gauge" {
+		query = `INSERT INTO gauges (name, value) VALUES ($1, $2)`
+	} else if mType == "counter" {
+		query = `INSERT INTO counters (name, value) VALUES ($1, $2)`
+	}
+	res, err := db.conn.Exec(query, mName, mVal)
+	if err != nil {
+		fmt.Println("WRITEMETRIC: " + fmt.Sprint(err))
+		return err
+	}
+	fmt.Println(res)
 	return nil
 }
 
@@ -101,6 +118,7 @@ func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
 		}
 		storage.PutGauge(mName, mVal)
 	}
+	rows.Close()
 
 	query = `
 		SELECT name, value 
@@ -125,6 +143,7 @@ func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
 		}
 		storage.PutCounter(mName, mVal)
 	}
+	rows.Close()
 
 	return storage, nil
 }

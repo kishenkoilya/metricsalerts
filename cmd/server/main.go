@@ -366,9 +366,16 @@ func saveValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 		}
 		handlerVars.storage.PutGauge(mName, res)
 	}
-
-	if handlerVars.syncFileWriter != nil {
-		handlerVars.syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
+	if handlerVars.db != nil {
+		err := handlerVars.db.WriteMetric(mType, mName, mVal)
+		if err != nil {
+			return http.StatusInternalServerError
+		}
+	} else if handlerVars.syncFileWriter != nil {
+		err := handlerVars.syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
+		if err != nil {
+			return http.StatusInternalServerError
+		}
 	}
 	return http.StatusOK
 }
@@ -455,7 +462,8 @@ func main() {
 
 	// psqlLine = "host=localhost port=5432 user=postgres password=gpadmin dbname=postgres"
 	var handlerVars *HandlerVars
-	if db, err := psqlinteraction.NewDBConnection(psqlLine); err != nil || storeInterval != 0 {
+	db, err := psqlinteraction.NewDBConnection(psqlLine)
+	if err != nil || storeInterval != 0 {
 		handlerVars = &HandlerVars{
 			storage:         storage,
 			syncFileWriter:  syncFileWriter,
@@ -468,6 +476,12 @@ func main() {
 			syncFileWriter:  syncFileWriter,
 			psqlConnectLine: &psqlLine,
 			db:              db,
+		}
+	}
+	if db != nil {
+		err := db.InitTables()
+		if err != nil {
+			sugar.Fatalw(err.Error(), "event", "init DB")
 		}
 	}
 

@@ -339,6 +339,8 @@ func main() {
 				// 	}
 				// 	fmt.Print("\n")
 				// }
+				// time.Sleep(1 * time.Second)
+
 				// resp := getAllMetrics(&addr)
 				// fmt.Println(string(resp.Body()))
 				// fmt.Println("all metr")
