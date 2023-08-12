@@ -29,12 +29,14 @@ func NewMetric(mType, mName, mVal string) *Metrics {
 		val, err := strconv.ParseFloat(mVal, 64)
 		if err != nil {
 			fmt.Println(err.Error())
+			return nil
 		}
 		res.Value = &val
 	} else if mType == "counter" {
 		val, err := strconv.ParseInt(mVal, 0, 64)
 		if err != nil {
 			fmt.Println(err.Error())
+			return nil
 		}
 		res.Delta = &val
 	}

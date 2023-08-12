@@ -190,6 +190,10 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 	metric := memstorage.NewMetric(mType, mName, mVal)
+	if metric == nil {
+		http.Error(w, "Error parsing value", http.StatusBadRequest)
+		return
+	}
 	statusRes, metric = handlerVars.storage.SaveMetric(metric)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("saveValue error: ", err.Error())

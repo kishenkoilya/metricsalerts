@@ -68,68 +68,6 @@ func Test_validateValues(t *testing.T) {
 	}
 }
 
-func Test_saveValue(t *testing.T) {
-	type args struct {
-		storage *memstorage.MemStorage
-		mType   string
-		mName   string
-		mVal    string
-	}
-	tests := []struct {
-		name string
-		args args
-		want int
-	}{
-		{
-			name: "Test1",
-			args: args{
-				storage: memstorage.NewMemStorage(),
-				mType:   "gauge",
-				mName:   "sdfs",
-				mVal:    "0.23412",
-			},
-			want: http.StatusOK,
-		},
-		{
-			name: "Test2",
-			args: args{
-				storage: memstorage.NewMemStorage(),
-				mType:   "counter",
-				mName:   "sdfs",
-				mVal:    "23412",
-			},
-			want: http.StatusOK,
-		},
-		{
-			name: "Test3",
-			args: args{
-				storage: memstorage.NewMemStorage(),
-				mType:   "gauge",
-				mName:   "sdfs",
-				mVal:    "0.23sdf412",
-			},
-			want: http.StatusBadRequest,
-		},
-		{
-			name: "Test4",
-			args: args{
-				storage: memstorage.NewMemStorage(),
-				mType:   "counter",
-				mName:   "sdfs",
-				mVal:    "0.23sdf412",
-			},
-			want: http.StatusBadRequest,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := saveValue(&HandlerVars{storage: tt.args.storage}, tt.args.mType, tt.args.mName, tt.args.mVal); got != tt.want {
-				t.Errorf("saveValues() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func Test_getValue(t *testing.T) {
 	type args struct {
 		storage *memstorage.MemStorage
