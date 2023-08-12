@@ -93,6 +93,33 @@ func (db *DBConnection) WriteMetric(mType, mName, mVal string) error {
 	return nil
 }
 
+func (db *DBConnection) WriteMetrics(metrics *[]memstorage.Metrics) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	for _, v := range *metrics {
+		if v.Value == nil {
+			_, err := tx.Exec(
+				"INSERT INTO counters (name, value)"+
+					" VALUES(?,?)", v.ID, v.Delta)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+		} else {
+			_, err := tx.Exec(
+				"INSERT INTO gauges (name, value)"+
+					" VALUES(?,?)", v.ID, v.Value)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
 func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
 	storage := memstorage.NewMemStorage()
 	query := `

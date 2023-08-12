@@ -3,6 +3,7 @@ package memstorage
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 )
 
@@ -19,7 +20,28 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
 }
 
-func (m *Metrics) PrintMetrics() {
+func NewMetric(mType, mName, mVal string) *Metrics {
+	res := Metrics{
+		MType: mType,
+		ID:    mName,
+	}
+	if mType == "gauge" {
+		val, err := strconv.ParseFloat(mVal, 64)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		res.Value = &val
+	} else if mType == "counter" {
+		val, err := strconv.ParseInt(mVal, 0, 64)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		res.Delta = &val
+	}
+	return &res
+}
+
+func (m *Metrics) PrintMetric() {
 	if m.Delta != nil {
 		fmt.Println("ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(*m.Delta) + "; Value:" + fmt.Sprint(m.Value))
 	} else if m.Value != nil {
@@ -29,7 +51,8 @@ func (m *Metrics) PrintMetrics() {
 	}
 }
 
-func (m *MemStorage) SaveMetrics(metric *Metrics) (int, *Metrics) {
+func (m *MemStorage) SaveMetric(metric *Metrics) (int, *Metrics) {
+	metric.PrintMetric()
 	if metric.MType == "gauge" {
 		m.PutGauge(metric.ID, *metric.Value)
 		val, ok := m.GetGauge(metric.ID)
@@ -46,6 +69,19 @@ func (m *MemStorage) SaveMetrics(metric *Metrics) (int, *Metrics) {
 		return http.StatusBadRequest, metric
 	}
 	return http.StatusOK, metric
+}
+
+func (m *MemStorage) SaveMetrics(metrics *[]Metrics) (int, *[]Metrics) {
+	status := http.StatusOK
+	for i, metric := range *metrics {
+		var pMetric *Metrics
+		status, pMetric = m.SaveMetric(&metric)
+		if status != http.StatusOK {
+			return status, nil
+		}
+		(*metrics)[i] = *pMetric
+	}
+	return status, metrics
 }
 
 func (m *MemStorage) GetMetrics(mType, mName string) (int, *Metrics) {

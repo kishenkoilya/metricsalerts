@@ -159,15 +159,7 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error getting value", statusRes)
 		return
 	}
-	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-	// 	c.Response.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(c.Response)
-	// 	defer gz.Close()
-	// 	_, err := gz.Write([]byte(body))
-	// 	if err != nil {
-	// 		sugar.Errorln("gzip write failed: ", err.Error())
-	// 	}
-	// }
+
 	w.Write([]byte(body))
 	w.WriteHeader(statusRes)
 }
@@ -197,22 +189,20 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error validating type and name", statusRes)
 		return
 	}
-	statusRes = saveValue(handlerVars, mType, mName, mVal)
+	metric := memstorage.NewMetric(mType, mName, mVal)
+	statusRes, metric = handlerVars.storage.SaveMetric(metric)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("saveValue error: ", err.Error())
 		http.Error(w, "Error parsing value", statusRes)
 		return
 	}
+	statusRes = writeValue(handlerVars, mType, mName, mVal)
+	if statusRes != http.StatusOK {
+		// sugar.Errorln("saveValue error: ", err.Error())
+		http.Error(w, "Error writing value to storage", statusRes)
+		return
+	}
 
-	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-	// 	c.Response.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(c.Response)
-	// 	defer gz.Close()
-	// 	_, err := gz.Write([]byte(body))
-	// 	if err != nil {
-	// 		sugar.Errorln("gzip write failed: ", err.Error())
-	// 	}
-	// }
 	w.Write([]byte(body))
 	w.WriteHeader(statusRes)
 }
@@ -241,15 +231,6 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 
-	// for k, v := range c.Request.Header {
-	// 	fmt.Print(k + ": ")
-	// 	for _, s := range v {
-	// 		fmt.Print(fmt.Sprint(s))
-	// 	}
-	// 	fmt.Print("\n")
-	// }
-	// req.PrintMetrics()
-
 	_, err = validateValues(req.MType, req.ID)
 	resp := &memstorage.Metrics{}
 	if err != nil {
@@ -270,17 +251,8 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
 	}
-	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-	// 	c.Response.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(c.Response)
-	// 	defer gz.Close()
-	// 	_, err := gz.Write(respJSON)
-	// 	if err != nil {
-	// 		sugar.Errorln("gzip write failed: ", err.Error())
-	// 	}
-	// }
+
 	w.Write(respJSON)
-	// w.WriteHeader(statusRes)
 }
 
 func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -313,9 +285,21 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
-	statusRes, req = handlerVars.storage.SaveMetrics(req)
+	statusRes, req = handlerVars.storage.SaveMetric(req)
 	if statusRes != http.StatusOK {
 		http.Error(w, "storage.SaveMetrics failed", statusRes)
+		return
+	}
+	var mVal string
+	if req.Delta != nil {
+		mVal = fmt.Sprint(req.Delta)
+	} else {
+		mVal = fmt.Sprint(req.Value)
+	}
+	statusRes = writeValue(handlerVars, mType, mName, mVal)
+	if statusRes != http.StatusOK {
+		// sugar.Errorln("saveValue error: ", err.Error())
+		http.Error(w, "Error writing value to storage", statusRes)
 		return
 	}
 	respJSON, err := json.Marshal(req)
@@ -323,17 +307,51 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
 		return
 	}
-	// if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-	// 	w.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(w)
-	// 	defer gz.Close()
-	// 	gz.Write(respJSON)
-	// 	return
-	// }
+
 	sugar.Infoln(string(respJSON))
 
 	w.Write(respJSON)
-	// w.WriteHeader(statusRes)
+}
+
+func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
+	sugar.Infoln("massUpdatePage")
+	var statusRes int
+	var req *[]memstorage.Metrics
+	w.Header().Set("Content-Type", "application/json")
+
+	reqBody := r.Body
+	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+		var err error
+		reqBody, err = gzip.NewReader(reqBody)
+		if err != nil {
+			http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	err := json.NewDecoder(reqBody).Decode(&req)
+	if err != nil {
+		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
+		return
+	}
+	// req.PrintMetrics()
+
+	statusRes, req = handlerVars.storage.SaveMetrics(req)
+	if statusRes != http.StatusOK {
+		http.Error(w, "storage.SaveMetrics failed", statusRes)
+		return
+	}
+
+	respJSON, err := json.Marshal(req)
+	if err != nil {
+		http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
+		return
+	}
+
+	sugar.Infoln(string(respJSON))
+
+	w.Write(respJSON)
 }
 
 func validateValues(mType, mName string) (int, error) {
@@ -352,22 +370,7 @@ func validateValues(mType, mName string) (int, error) {
 	return http.StatusOK, nil
 }
 
-func saveValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
-	if mType == "counter" {
-		res, err := strconv.ParseInt(mVal, 0, 64)
-		if err != nil {
-			fmt.Println(err.Error())
-			return http.StatusBadRequest
-		}
-		handlerVars.storage.PutCounter(mName, res)
-	} else if mType == "gauge" {
-		res, err := strconv.ParseFloat(mVal, 64)
-		if err != nil {
-			fmt.Println(err.Error())
-			return http.StatusBadRequest
-		}
-		handlerVars.storage.PutGauge(mName, res)
-	}
+func writeValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 	if handlerVars.db != nil {
 		sugar.Infoln("Writing metric to db")
 		err := handlerVars.db.WriteMetric(mType, mName, mVal)
@@ -378,6 +381,25 @@ func saveValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 	} else if handlerVars.syncFileWriter != nil {
 		sugar.Infoln("Writing metric to file")
 		err := handlerVars.syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
+		if err != nil {
+			fmt.Println(err.Error())
+			return http.StatusInternalServerError
+		}
+	}
+	return http.StatusOK
+}
+
+func writeValues(handlerVars *HandlerVars, metrics *[]memstorage.Metrics) int {
+	if handlerVars.db != nil {
+		sugar.Infoln("Writing metrics to db")
+		err := handlerVars.db.WriteMetrics(metrics)
+		if err != nil {
+			fmt.Println(err.Error())
+			return http.StatusInternalServerError
+		}
+	} else if handlerVars.syncFileWriter != nil {
+		sugar.Infoln("Writing metric to file")
+		err := handlerVars.syncFileWriter.WriteMetrics(metrics)
 		if err != nil {
 			fmt.Println(err.Error())
 			return http.StatusInternalServerError
@@ -509,6 +531,7 @@ func main() {
 	router.POST("/update/:mType/:mName/:mVal", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updatePage, handlerVars))))
 	router.POST("/value/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(getJSONPage, handlerVars))))
 	router.POST("/update/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updateJSONPage, handlerVars))))
+	router.POST("/updates/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(massUpdatePage, handlerVars))))
 
 	server := &http.Server{
 		Addr:    addr,
