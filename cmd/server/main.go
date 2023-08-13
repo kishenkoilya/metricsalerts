@@ -258,6 +258,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 
+	w.WriteHeader(statusRes)
 	w.Write(respJSON)
 }
 
@@ -316,6 +317,7 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 
 	sugar.Infoln(string(respJSON))
 
+	w.WriteHeader(statusRes)
 	w.Write(respJSON)
 }
 
@@ -365,6 +367,7 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 
 	sugar.Infoln(string(respJSON))
 
+	w.WriteHeader(statusRes)
 	w.Write(respJSON)
 }
 
