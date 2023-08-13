@@ -490,6 +490,7 @@ func main() {
 	if restore {
 		db, err := psqlinteraction.NewDBConnection(psqlLine)
 		if err != nil {
+			fmt.Println(err.Error())
 			consumer, err := filerw.NewConsumer(filePath)
 			if err == nil {
 				storage, _ = consumer.ReadMemStorage()
@@ -508,13 +509,16 @@ func main() {
 			}
 		}
 	}
+
+	// psqlLine = "host=localhost port=5432 user=postgres password=gpadmin dbname=postgres"
+	var handlerVars *HandlerVars
 	syncFileWriter, err := filerw.NewProducer(filePath, false)
 	if err != nil {
 		sugar.Fatalw(err.Error(), "event", "Init file writer")
 	}
-
-	// psqlLine = "host=localhost port=5432 user=postgres password=gpadmin dbname=postgres"
-	var handlerVars *HandlerVars
+	if storeInterval == 0 {
+		syncFileWriter = nil
+	}
 	db, err := psqlinteraction.NewDBConnection(psqlLine)
 	if err != nil || storeInterval != 0 {
 		handlerVars = &HandlerVars{
