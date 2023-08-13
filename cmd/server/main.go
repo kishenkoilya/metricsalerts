@@ -308,7 +308,7 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "Error writing value to storage", statusRes)
 		return
 	}
-	respJSON, err := json.Marshal(req)
+	respJSON, err := json.Marshal(&req)
 	if err != nil {
 		http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
 		return
@@ -357,7 +357,7 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		return
 	}
 
-	respJSON, err := json.Marshal(req)
+	respJSON, err := json.Marshal(&req)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
@@ -516,7 +516,7 @@ func main() {
 	if err != nil {
 		sugar.Fatalw(err.Error(), "event", "Init file writer")
 	}
-	if storeInterval == 0 {
+	if storeInterval != 0 {
 		syncFileWriter = nil
 	}
 	db, err := psqlinteraction.NewDBConnection(psqlLine)
