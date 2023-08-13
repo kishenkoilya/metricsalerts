@@ -85,14 +85,34 @@ func (m *MemStorage) SaveMetric(metric *Metrics) (int, *Metrics) {
 
 func (m *MemStorage) SaveMetrics(metrics *[]Metrics) (int, *[]Metrics) {
 	status := http.StatusOK
-	newMetrics := make([]Metrics, len(*metrics))
-	for i, metric := range *metrics {
-		var pMetric *Metrics
-		status, pMetric = m.SaveMetric(&metric)
+	results := make(map[string]string)
+	for _, metric := range *metrics {
+		status, _ = m.SaveMetric(&metric)
 		if status != http.StatusOK {
 			return status, nil
 		}
-		newMetrics[i] = *pMetric
+		results[metric.ID] = metric.MType
+	}
+	newMetrics := make([]Metrics, len(results))
+	iter := 0
+	for k, v := range results {
+		if v == "gauge" {
+			val, _ := m.GetGauge(k)
+			newMetrics[iter] = Metrics{
+				ID:    k,
+				MType: "gauge",
+				Value: &val,
+			}
+			iter++
+		} else if v == "counter" {
+			val, _ := m.GetCounter(k)
+			newMetrics[iter] = Metrics{
+				ID:    k,
+				MType: "counter",
+				Delta: &val,
+			}
+			iter++
+		}
 	}
 	return status, &newMetrics
 }

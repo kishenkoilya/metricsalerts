@@ -343,23 +343,26 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
-	for _, val := range *req {
-		val.PrintMetric()
-	}
+	// for _, val := range *req {
+	// 	val.PrintMetric()
+	// }
 
-	statusRes, req = handlerVars.storage.SaveMetrics(req)
+	statusRes, resp := handlerVars.storage.SaveMetrics(req)
 	if statusRes != http.StatusOK {
 		http.Error(w, "storage.SaveMetrics failed", statusRes)
 		return
 	}
-
-	statusRes = writeValues(handlerVars, req)
+	fmt.Println("printing response: ")
+	for _, val := range *resp {
+		val.PrintMetric()
+	}
+	statusRes = writeValues(handlerVars, resp)
 	if statusRes != http.StatusOK {
 		http.Error(w, "writeValues failed", statusRes)
 		return
 	}
 
-	respJSON, err := json.Marshal(&req)
+	respJSON, err := json.Marshal(&resp)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
