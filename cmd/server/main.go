@@ -324,6 +324,7 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	sugar.Infoln("massUpdatePage")
 	var statusRes int
 	var req *[]memstorage.Metrics
+	w.Header().Set("Content-Type", "application/json")
 
 	reqBody := r.Body
 	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
@@ -343,7 +344,6 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	for _, val := range *req {
 		val.PrintMetric()
 	}
-	w.Header().Set("Content-Type", "application/json")
 
 	statusRes, req = handlerVars.storage.SaveMetrics(req)
 	if statusRes != http.StatusOK {
@@ -357,7 +357,7 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		return
 	}
 
-	respJSON, err := json.Marshal(req)
+	respJSON, err := json.Marshal(&req)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
