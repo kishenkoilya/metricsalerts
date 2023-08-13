@@ -354,7 +354,7 @@ func main() {
 			select {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
-				SendMetrics(&addr, storage)
+				// SendMetrics(&addr, storage)
 				// SendJSONMetrics(&addr, storage)
 				SendAllMetrics(&addr, storage)
 				// client := resty.New().R()

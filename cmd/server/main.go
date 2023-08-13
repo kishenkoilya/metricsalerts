@@ -194,7 +194,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error parsing value", http.StatusBadRequest)
 		return
 	}
-	statusRes, metric = handlerVars.storage.SaveMetric(metric)
+	statusRes, _ = handlerVars.storage.SaveMetric(metric)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("saveValue error: ", err.Error())
 		http.Error(w, "Error parsing value", statusRes)
@@ -322,7 +322,6 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	sugar.Infoln("massUpdatePage")
 	var statusRes int
 	var req *[]memstorage.Metrics
-	w.Header().Set("Content-Type", "application/json")
 
 	reqBody := r.Body
 	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
@@ -339,7 +338,9 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
-	// req.PrintMetrics()
+	for _, val := range *req {
+		val.PrintMetric()
+	}
 
 	statusRes, req = handlerVars.storage.SaveMetrics(req)
 	if statusRes != http.StatusOK {
@@ -347,13 +348,20 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		return
 	}
 
-	respJSON, err := json.Marshal(req)
-	if err != nil {
-		http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
+	statusRes = writeValues(handlerVars, req)
+	if statusRes != http.StatusOK {
+		http.Error(w, "writeValues failed", statusRes)
 		return
 	}
 
-	sugar.Infoln(string(respJSON))
+	respJSON, err := json.Marshal(req)
+	if err != nil {
+		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	// sugar.Infoln(string(respJSON))
 
 	w.Write(respJSON)
 }

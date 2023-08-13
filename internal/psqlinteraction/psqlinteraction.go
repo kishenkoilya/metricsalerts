@@ -102,7 +102,7 @@ func (db *DBConnection) WriteMetrics(metrics *[]memstorage.Metrics) error {
 		if v.Value == nil {
 			_, err := tx.Exec(
 				"INSERT INTO counters (name, value)"+
-					" VALUES(?,?)", v.ID, v.Delta)
+					" VALUES($1,$2)", v.ID, *v.Delta)
 			if err != nil {
 				tx.Rollback()
 				return err
@@ -110,7 +110,7 @@ func (db *DBConnection) WriteMetrics(metrics *[]memstorage.Metrics) error {
 		} else {
 			_, err := tx.Exec(
 				"INSERT INTO gauges (name, value)"+
-					" VALUES(?,?)", v.ID, v.Value)
+					" VALUES($1,$2)", v.ID, *v.Value)
 			if err != nil {
 				tx.Rollback()
 				return err
