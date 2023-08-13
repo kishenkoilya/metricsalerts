@@ -361,8 +361,8 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "writeValues failed", statusRes)
 		return
 	}
-
-	respJSON, err := json.Marshal(&resp)
+	resp1 := (*resp)[0]
+	respJSON, err := json.Marshal(&resp1)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
