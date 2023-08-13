@@ -85,15 +85,16 @@ func (m *MemStorage) SaveMetric(metric *Metrics) (int, *Metrics) {
 
 func (m *MemStorage) SaveMetrics(metrics *[]Metrics) (int, *[]Metrics) {
 	status := http.StatusOK
+	newMetrics := make([]Metrics, len(*metrics))
 	for i, metric := range *metrics {
 		var pMetric *Metrics
 		status, pMetric = m.SaveMetric(&metric)
 		if status != http.StatusOK {
 			return status, nil
 		}
-		(*metrics)[i] = *pMetric
+		newMetrics[i] = *pMetric
 	}
-	return status, metrics
+	return status, &newMetrics
 }
 
 func (m *MemStorage) GetMetrics(mType, mName string) (int, *Metrics) {
