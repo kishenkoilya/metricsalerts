@@ -53,6 +53,16 @@ func (m *Metrics) PrintMetric() {
 	}
 }
 
+func (m *Metrics) StringMetric() string {
+	if m.Delta != nil {
+		return "ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(*m.Delta) + "; Value:" + fmt.Sprint(m.Value)
+	} else if m.Value != nil {
+		return "ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(m.Delta) + "; Value:" + fmt.Sprint(*m.Value)
+	} else {
+		return "ID: " + m.ID + "; MType: " + m.MType + "; Delta: " + fmt.Sprint(m.Delta) + "; Value:" + fmt.Sprint(m.Value)
+	}
+}
+
 func (m *MemStorage) SaveMetric(metric *Metrics) (int, *Metrics) {
 	metric.PrintMetric()
 	if metric.MType == "gauge" {

@@ -194,7 +194,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error parsing value", http.StatusBadRequest)
 		return
 	}
-	statusRes, _ = handlerVars.storage.SaveMetric(metric)
+	statusRes, metric = handlerVars.storage.SaveMetric(metric)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("saveValue error: ", err.Error())
 		http.Error(w, "Error parsing value", statusRes)
@@ -206,7 +206,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error writing value to storage", statusRes)
 		return
 	}
-
+	body += metric.StringMetric()
 	w.Write([]byte(body))
 	w.WriteHeader(statusRes)
 }
@@ -249,6 +249,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		w.WriteHeader(statusRes)
 		return
 	}
+	resp.PrintMetric()
 
 	respJSON, err := json.Marshal(resp)
 	if err != nil {
@@ -484,7 +485,7 @@ func main() {
 	sugar = *logger.Sugar()
 
 	addr, storeInterval, filePath, restore, psqlLine := getVars()
-	fmt.Println(addr, storeInterval, filePath, restore)
+	fmt.Println(addr, storeInterval, filePath, restore, psqlLine)
 	storage := memstorage.NewMemStorage()
 	if restore {
 		db, err := psqlinteraction.NewDBConnection(psqlLine)
