@@ -335,7 +335,7 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		}
 	}
 
-	err := json.NewDecoder(reqBody).Decode(req)
+	err := json.NewDecoder(reqBody).Decode(&req)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
