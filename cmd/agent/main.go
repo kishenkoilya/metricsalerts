@@ -114,7 +114,17 @@ func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage)
 	})
 	request := makeJSONGZIPRequest(client, metrics)
 	resp, err := request.Post(addr.AddrCommand("updates", "", "", ""))
+	defer resp.RawBody().Close()
 	printResponse(resp, err, "SendAllMetrics")
+	// fmt.Println("result print")
+	// var result []memstorage.Metrics
+	// err = json.Unmarshal(resp.Body(), &result)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
+	// for _, v := range result {
+	// 	v.PrintMetric()
+	// }
 }
 
 func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
@@ -254,6 +264,7 @@ func getAllMetrics(addr *addressurl.AddressURL) *resty.Response {
 }
 
 func printResponse(resp *resty.Response, err error, funcName string) {
+	fmt.Println(resp.Request.URL)
 	fmt.Println(resp.Proto() + " " + resp.Status())
 	for k, v := range resp.Header() {
 		fmt.Print(k + ": ")
@@ -354,6 +365,7 @@ func main() {
 			select {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
+				// testMass(&addr)
 				SendMetrics(&addr, storage)
 				// SendJSONMetrics(&addr, storage)
 				// SendAllMetrics(&addr, storage)
@@ -407,4 +419,44 @@ func main() {
 	wg.Wait()
 
 	fmt.Println("Программа завершена")
+}
+
+func testMass(addr *addressurl.AddressURL) {
+	delta1 := int64(837942796)
+	value1 := float64(943708.7207719209)
+	delta2 := int64(357569249)
+	value2 := float64(31800.67860827374)
+	delta3 := int64(837942796)
+	value3 := float64(943708.7207719209)
+	delta4 := int64(357569249)
+	value4 := float64(31800.67860827374)
+	metrics := []memstorage.Metrics{
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta1},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value1},
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta2},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value2},
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta3},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value3},
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta4},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value4},
+	}
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
+	request := makeJSONGZIPRequest(client, metrics)
+	resp, err := request.Post(addr.AddrCommand("updates", "", "", ""))
+	defer resp.RawBody().Close()
+	printResponse(resp, err, "SendAllMetrics")
+	fmt.Println("result print")
+	var result []memstorage.Metrics
+	err = json.Unmarshal(resp.Body(), &result)
+	if err != nil {
+		fmt.Println(err)
+	}
+	for _, v := range result {
+		v.PrintMetric()
+	}
+
 }

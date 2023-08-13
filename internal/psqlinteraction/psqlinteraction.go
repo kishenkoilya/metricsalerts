@@ -47,7 +47,7 @@ func (db *DBConnection) InitTables() error {
 		return err
 	}
 	fmt.Println(res)
-	query = `CREATE TABLE IF NOT EXISTS counters (id SERIAL PRIMARY KEY, name VARCHAR(50), value int);`
+	query = `CREATE TABLE IF NOT EXISTS counters (id SERIAL PRIMARY KEY, name VARCHAR(50), value bigint);`
 	res, err = db.conn.Exec(query)
 	if err != nil {
 		return err
