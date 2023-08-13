@@ -335,7 +335,7 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		}
 	}
 
-	err := json.NewDecoder(reqBody).Decode(&req)
+	err := json.NewDecoder(reqBody).Decode(req)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
@@ -357,13 +357,13 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		return
 	}
 
-	respJSON, err := json.Marshal(&req)
+	respJSON, err := json.Marshal(req)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
 	}
 
-	// sugar.Infoln(string(respJSON))
+	sugar.Infoln(string(respJSON))
 
 	w.Write(respJSON)
 }
