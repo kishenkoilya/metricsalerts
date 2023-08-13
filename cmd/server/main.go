@@ -234,6 +234,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
+	req.PrintMetric()
 
 	_, err = validateValues(req.MType, req.ID)
 	resp := &memstorage.Metrics{}
@@ -341,6 +342,7 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	for _, val := range *req {
 		val.PrintMetric()
 	}
+	w.Header().Set("Content-Type", "application/json")
 
 	statusRes, req = handlerVars.storage.SaveMetrics(req)
 	if statusRes != http.StatusOK {
@@ -359,7 +361,6 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 
 	// sugar.Infoln(string(respJSON))
 
