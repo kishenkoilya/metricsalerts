@@ -151,7 +151,6 @@ func Retrypg(errClass string, f psqlinteraction.RetryFunc) (interface{}, error) 
 					}
 				}
 			}
-			return nil, err
 		}
 	}
 
