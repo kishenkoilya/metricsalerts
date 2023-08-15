@@ -7,122 +7,145 @@ import (
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 )
 
-func PingPSQL(psqlLine string) error {
-	connConfig, err := pgx.ParseConnectionString(psqlLine)
-	if err != nil {
-		return err
+type RetryFunc func() (interface{}, error)
+
+func PingPSQL(psqlLine string) RetryFunc {
+	return func() (interface{}, error) {
+		connConfig, err := pgx.ParseConnectionString(psqlLine)
+		if err != nil {
+			return nil, err
+		}
+		db, err := pgx.Connect(connConfig)
+		if err != nil {
+			return nil, err
+		}
+		defer db.Close()
+		return nil, nil
 	}
-	db, err := pgx.Connect(connConfig)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	return nil
 }
 
 type DBConnection struct {
 	conn *pgx.Conn
 }
 
-func NewDBConnection(psqlLine string) (*DBConnection, error) {
-	connConfig, err := pgx.ParseConnectionString(psqlLine)
-	if err != nil {
-		return nil, err
+func NewDBConnection(psqlLine string) RetryFunc {
+	return func() (interface{}, error) {
+		connConfig, err := pgx.ParseConnectionString(psqlLine)
+		if err != nil {
+			return nil, err
+		}
+		db, err := pgx.Connect(connConfig)
+		if err != nil {
+			return nil, err
+		}
+		return &DBConnection{db}, nil
 	}
-	db, err := pgx.Connect(connConfig)
-	if err != nil {
-		return nil, err
-	}
-	return &DBConnection{db}, nil
 }
 
 func (db *DBConnection) Close() error {
 	return db.conn.Close()
 }
 
-func (db *DBConnection) InitTables() error {
-	query := `CREATE TABLE IF NOT EXISTS gauges (id SERIAL PRIMARY KEY, name VARCHAR(50), value double precision);`
-	res, err := db.conn.Exec(query)
-	if err != nil {
-		return err
-	}
-	fmt.Println(res)
-	query = `CREATE TABLE IF NOT EXISTS counters (id SERIAL PRIMARY KEY, name VARCHAR(50), value bigint);`
-	res, err = db.conn.Exec(query)
-	if err != nil {
-		return err
-	}
-	fmt.Println(res)
-	return nil
-}
-
-func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) error {
-	query := `INSERT INTO counters (name, value) VALUES ($1, $2)`
-	for k, v := range storage.Counters {
-		res, err := db.conn.Exec(query, k, v)
+func (db *DBConnection) InitTables() RetryFunc {
+	return func() (interface{}, error) {
+		query := `CREATE TABLE IF NOT EXISTS gauges (id SERIAL PRIMARY KEY, name VARCHAR(50), value double precision);`
+		res, err := db.conn.Exec(query)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		fmt.Println(res)
-	}
-	query = `INSERT INTO gauges (name, value) VALUES ($1, $2)`
-	for k, v := range storage.Gauges {
-		res, err := db.conn.Exec(query, k, v)
+		query = `CREATE TABLE IF NOT EXISTS counters (id SERIAL PRIMARY KEY, name VARCHAR(50), value bigint);`
+		res, err = db.conn.Exec(query)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		fmt.Println(res)
+		return nil, nil
 	}
-	db.Close()
-	return nil
 }
 
-func (db *DBConnection) WriteMetric(mType, mName, mVal string) error {
-	var query string
-	if mType == "gauge" {
-		query = `INSERT INTO gauges (name, value) VALUES ($1, $2)`
-	} else if mType == "counter" {
-		query = `INSERT INTO counters (name, value) VALUES ($1, $2)`
-	}
-	res, err := db.conn.Exec(query, mName, mVal)
-	if err != nil {
-		fmt.Println("WRITEMETRIC: " + fmt.Sprint(err))
-		return err
-	}
-	fmt.Println(res)
-	return nil
-}
+func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) RetryFunc {
+	return func() (interface{}, error) {
+		tx, err := db.conn.Begin()
+		if err != nil {
+			return nil, err
+		}
 
-func (db *DBConnection) WriteMetrics(metrics *[]memstorage.Metrics) error {
-	tx, err := db.conn.Begin()
-	if err != nil {
-		return err
-	}
-	for _, v := range *metrics {
-		if v.Value == nil {
-			_, err := tx.Exec(
-				"INSERT INTO counters (name, value)"+
-					" VALUES($1,$2)", v.ID, *v.Delta)
+		for k, v := range storage.Counters {
+			_, err := tx.Exec("INSERT INTO counters (name, value) VALUES($1,$2)", k, v)
 			if err != nil {
 				tx.Rollback()
-				return err
-			}
-		} else {
-			_, err := tx.Exec(
-				"INSERT INTO gauges (name, value)"+
-					" VALUES($1,$2)", v.ID, *v.Value)
-			if err != nil {
-				tx.Rollback()
-				return err
+				return nil, err
 			}
 		}
+		for k, v := range storage.Gauges {
+			_, err := tx.Exec("INSERT INTO gauges (name, value) VALUES($1,$2)", k, v)
+			if err != nil {
+				tx.Rollback()
+				return nil, err
+			}
+		}
+		err = tx.Commit()
+		if err != nil {
+			db.Close()
+			return nil, err
+		}
+		db.Close()
+		return nil, nil
 	}
-	return tx.Commit()
 }
 
-func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
-	storage := memstorage.NewMemStorage()
-	query := `
+func (db *DBConnection) WriteMetric(mType, mName, mVal string) RetryFunc {
+	return func() (interface{}, error) {
+		var query string
+		if mType == "gauge" {
+			query = `INSERT INTO gauges (name, value) VALUES ($1, $2)`
+		} else if mType == "counter" {
+			query = `INSERT INTO counters (name, value) VALUES ($1, $2)`
+		}
+		res, err := db.conn.Exec(query, mName, mVal)
+		if err != nil {
+			fmt.Println("WRITEMETRIC: " + fmt.Sprint(err))
+			return nil, err
+		}
+		fmt.Println(res)
+		return nil, nil
+	}
+}
+
+func (db *DBConnection) WriteMetrics(metrics *[]memstorage.Metrics) RetryFunc {
+	return func() (interface{}, error) {
+		tx, err := db.conn.Begin()
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range *metrics {
+			if v.Value == nil {
+				_, err := tx.Exec(
+					"INSERT INTO counters (name, value)"+
+						" VALUES($1,$2)", v.ID, *v.Delta)
+				if err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+			} else {
+				_, err := tx.Exec(
+					"INSERT INTO gauges (name, value)"+
+						" VALUES($1,$2)", v.ID, *v.Value)
+				if err != nil {
+					tx.Rollback()
+					return nil, err
+				}
+			}
+		}
+		return nil, tx.Commit()
+	}
+}
+
+func (db *DBConnection) ReadMemStorage() RetryFunc {
+	return func() (interface{}, error) {
+		storage := memstorage.NewMemStorage()
+		query := `
 		SELECT name, value 
 		FROM gauges
 		WHERE id IN (
@@ -132,22 +155,22 @@ func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
 			GROUP BY name
 		)
 	`
-	rows, err := db.conn.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var mName string
-		var mVal float64
-		err := rows.Scan(&mName, &mVal)
+		rows, err := db.conn.Query(query)
 		if err != nil {
 			return nil, err
 		}
-		storage.PutGauge(mName, mVal)
-	}
-	rows.Close()
+		for rows.Next() {
+			var mName string
+			var mVal float64
+			err := rows.Scan(&mName, &mVal)
+			if err != nil {
+				return nil, err
+			}
+			storage.PutGauge(mName, mVal)
+		}
+		rows.Close()
 
-	query = `
+		query = `
 		SELECT name, value 
 		FROM counters 
 		WHERE id IN (
@@ -157,20 +180,21 @@ func (db *DBConnection) ReadMemStorage() (*memstorage.MemStorage, error) {
 			GROUP BY name
 		)
 	`
-	rows, err = db.conn.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	for rows.Next() {
-		var mName string
-		var mVal int64
-		err := rows.Scan(&mName, &mVal)
+		rows, err = db.conn.Query(query)
 		if err != nil {
 			return nil, err
 		}
-		storage.PutCounter(mName, mVal)
-	}
-	rows.Close()
+		for rows.Next() {
+			var mName string
+			var mVal int64
+			err := rows.Scan(&mName, &mVal)
+			if err != nil {
+				return nil, err
+			}
+			storage.PutCounter(mName, mVal)
+		}
+		rows.Close()
 
-	return storage, nil
+		return storage, nil
+	}
 }

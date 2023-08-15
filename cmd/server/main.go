@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v6"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx"
 	"github.com/julienschmidt/httprouter"
 	"github.com/kishenkoilya/metricsalerts/internal/filerw"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
@@ -126,6 +128,47 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
+func Retrypg(errClass string, f psqlinteraction.RetryFunc) (interface{}, error) {
+	var result interface{}
+	var err error
+
+	for i := 0; i < 3; i++ {
+		result, err = f()
+		if err == nil {
+			return result, nil
+		} else {
+			if pgerr, ok := err.(pgx.PgError); ok {
+				if errCodeCompare(errClass, pgerr.Code) {
+					switch i {
+					case 0:
+						time.Sleep(1 * time.Second)
+					case 1:
+						time.Sleep(3 * time.Second)
+					case 2:
+						time.Sleep(5 * time.Second)
+					default:
+						return nil, err
+					}
+				}
+			}
+			return nil, err
+		}
+	}
+
+	return nil, fmt.Errorf("all %d attempts failed: %w", 3, err)
+}
+
+func errCodeCompare(errClass, errCode string) bool {
+	switch errClass {
+	case pgerrcode.ConnectionException:
+		return pgerrcode.IsConnectionException(errCode)
+	case pgerrcode.OperatorIntervention:
+		return pgerrcode.IsOperatorIntervention(errCode)
+	default:
+		return false
+	}
+}
+
 func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("printAllPage")
@@ -167,7 +210,8 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 func pingPostgrePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("pingPostgrePage")
-	err := psqlinteraction.PingPSQL(*handlerVars.psqlConnectLine)
+	dbPingFunc := psqlinteraction.PingPSQL(*handlerVars.psqlConnectLine)
+	_, err := Retrypg(pgerrcode.OperatorIntervention, dbPingFunc)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -393,7 +437,8 @@ func validateValues(mType, mName string) (int, error) {
 func writeValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 	if handlerVars.db != nil {
 		sugar.Infoln("Writing metric to db")
-		err := handlerVars.db.WriteMetric(mType, mName, mVal)
+		dbWriteMetricFunc := handlerVars.db.WriteMetric(mType, mName, mVal)
+		_, err := Retrypg(pgerrcode.ConnectionException, dbWriteMetricFunc)
 		if err != nil {
 			fmt.Println(err.Error())
 			return http.StatusInternalServerError
@@ -412,7 +457,8 @@ func writeValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
 func writeValues(handlerVars *HandlerVars, metrics *[]memstorage.Metrics) int {
 	if handlerVars.db != nil {
 		sugar.Infoln("Writing metrics to db")
-		err := handlerVars.db.WriteMetrics(metrics)
+		dbWriteMetricsFunc := handlerVars.db.WriteMetrics(metrics)
+		_, err := Retrypg(pgerrcode.ConnectionException, dbWriteMetricsFunc)
 		if err != nil {
 			fmt.Println(err.Error())
 			return http.StatusInternalServerError
@@ -493,8 +539,9 @@ func main() {
 	addr, storeInterval, filePath, restore, psqlLine := getVars()
 	fmt.Println(addr, storeInterval, filePath, restore, psqlLine)
 	storage := memstorage.NewMemStorage()
+	dbConnFunc := psqlinteraction.NewDBConnection(psqlLine)
 	if restore {
-		db, err := psqlinteraction.NewDBConnection(psqlLine)
+		obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
 		if err != nil {
 			fmt.Println(err.Error())
 			consumer, err := filerw.NewConsumer(filePath)
@@ -503,7 +550,15 @@ func main() {
 				fmt.Println(storage.PrintAll())
 			}
 		} else {
-			storage, err := db.ReadMemStorage()
+			var db *psqlinteraction.DBConnection
+			if obj != nil {
+				db = obj.(*psqlinteraction.DBConnection)
+			}
+			dbReadMemFunc := db.ReadMemStorage()
+			obj, err := Retrypg(pgerrcode.ConnectionException, dbReadMemFunc)
+			if obj != nil {
+				storage = obj.(*memstorage.MemStorage)
+			}
 			if err == nil {
 				fmt.Println(storage.PrintAll())
 			} else {
@@ -525,7 +580,11 @@ func main() {
 	if storeInterval != 0 {
 		syncFileWriter = nil
 	}
-	db, err := psqlinteraction.NewDBConnection(psqlLine)
+	obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+	var db *psqlinteraction.DBConnection
+	if obj != nil {
+		db = obj.(*psqlinteraction.DBConnection)
+	}
 	if err != nil || storeInterval != 0 {
 		handlerVars = &HandlerVars{
 			storage:         storage,
@@ -542,7 +601,8 @@ func main() {
 		}
 	}
 	if db != nil {
-		err := db.InitTables()
+		dbInitFunc := db.InitTables()
+		_, err := Retrypg(pgerrcode.ConnectionException, dbInitFunc)
 		if err != nil {
 			sugar.Fatalw(err.Error(), "event", "init DB")
 		}
@@ -580,7 +640,12 @@ func main() {
 				select {
 				case <-ticker.C:
 					fmt.Println("Saving to storage")
-					if db, err := psqlinteraction.NewDBConnection(psqlLine); err != nil {
+					obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+					var db *psqlinteraction.DBConnection
+					if obj != nil {
+						db = obj.(*psqlinteraction.DBConnection)
+					}
+					if err != nil {
 						producer, err := filerw.NewProducer(filePath, true)
 						if err != nil {
 							sugar.Fatalw(err.Error(), "event", "init file writer")
@@ -590,7 +655,8 @@ func main() {
 							panic(err)
 						}
 					} else {
-						err = db.WriteMemStorage(storage)
+						dbWriteMemFunc := db.WriteMemStorage(storage)
+						_, err = Retrypg(pgerrcode.ConnectionException, dbWriteMemFunc)
 						if err != nil {
 							panic(err)
 						}
@@ -611,7 +677,13 @@ func waitForShutdown(server *http.Server, handlerVars *HandlerVars, filePath str
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-signalChan
-	if db, err := psqlinteraction.NewDBConnection(*handlerVars.psqlConnectLine); err != nil {
+	dbConnFunc := psqlinteraction.NewDBConnection(*handlerVars.psqlConnectLine)
+	obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+	var db *psqlinteraction.DBConnection
+	if obj != nil {
+		db = obj.(*psqlinteraction.DBConnection)
+	}
+	if err != nil {
 		producer, err := filerw.NewProducer(filePath, true)
 		if err != nil {
 			sugar.Fatalw(err.Error(), "event", "init file writer")
@@ -625,7 +697,8 @@ func waitForShutdown(server *http.Server, handlerVars *HandlerVars, filePath str
 			sugar.Errorln(err.Error())
 		}
 	} else {
-		err = db.WriteMemStorage(handlerVars.storage)
+		dbWriteMemFunc := db.WriteMemStorage(handlerVars.storage)
+		_, err = Retrypg(pgerrcode.ConnectionException, dbWriteMemFunc)
 		if err != nil {
 			panic(err)
 		}

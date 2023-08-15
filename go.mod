@@ -16,6 +16,7 @@ require (
 
 require (
 	github.com/caarlos0/env/v6 v6.10.1 // indirect
+	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v5 v5.4.3
 	github.com/julienschmidt/httprouter v1.3.0
