@@ -287,9 +287,9 @@ func main() {
 	// defer cancel()
 	ctx := context.Background()
 
-	address, reportInterval, pollInterval := getVars()
+	config := getVars()
 
-	addr := addressurl.AddressURL{Protocol: "http", Address: address}
+	addr := addressurl.AddressURL{Protocol: "http", Address: config.Address}
 
 	metrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
@@ -303,7 +303,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {
@@ -322,7 +322,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(reportInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration(config.ReportInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {

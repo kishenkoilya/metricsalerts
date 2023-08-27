@@ -148,7 +148,8 @@ func main() {
 
 	sugar = *logger.Sugar()
 
-	addr, storeInterval, filePath, restore, psqlLine := getVars()
+	addr, storeInterval, filePath, restore, psqlLine, key := getVars()
+	fmt.Println(key)
 	fmt.Println(addr, storeInterval, filePath, restore, psqlLine)
 	storage := memstorage.NewMemStorage()
 	dbConnFunc := psqlinteraction.NewDBConnection(psqlLine)

@@ -14,14 +14,16 @@ type Config struct {
 	FilePath      string `env:"FILE_STORAGE_PATH"`
 	Restore       bool   `env:"RESTORE"`
 	DatabaseDSN   string `env:"DATABASE_DSN"`
+	Key           string `env:"KEY"`
 }
 
-func getVars() (string, int, string, bool, string) {
+func getVars() (string, int, string, bool, string, string) {
 	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
 	storeInterval := flag.Int("i", 300, "A time interval for storing metrics in file")
 	filePath := flag.String("f", "/tmp/metrics-db.json", "Path to file where metrics will be stored")
 	restore := flag.Bool("r", true, "A flag that determines wether server will download metrics from file upon start")
 	psqlLine := flag.String("d", "", "A string that contains info to connect to psql")
+	key := flag.String("k", "", "Key for hash func")
 
 	flag.Parse()
 
@@ -46,5 +48,9 @@ func getVars() (string, int, string, bool, string) {
 	if cfg.DatabaseDSN != "" {
 		psqlLine = &cfg.DatabaseDSN
 	}
-	return *addr, *storeInterval, *filePath, *restore, *psqlLine
+	if cfg.Key != "" {
+		key = &cfg.Key
+	}
+
+	return *addr, *storeInterval, *filePath, *restore, *psqlLine, *key
 }
