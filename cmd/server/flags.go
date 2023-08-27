@@ -38,13 +38,13 @@ func getVars() Config {
 	if cfg.Address == "" {
 		cfg.Address = *addr
 	}
-	if _, err := os.LookupEnv("STORE_INTERVAL"); err {
+	if _, err := os.LookupEnv("STORE_INTERVAL"); !err {
 		cfg.StoreInterval = *storeInterval
 	}
 	if cfg.FilePath == "" {
 		cfg.FilePath = *filePath
 	}
-	if _, err := os.LookupEnv("RESTORE"); err {
+	if _, err := os.LookupEnv("RESTORE"); !err {
 		cfg.Restore = *restore
 	}
 	if cfg.DatabaseDSN == "" {
