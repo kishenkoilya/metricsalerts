@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/caarlos0/env/v6"
@@ -14,7 +15,7 @@ type Config struct {
 	Key            string `env:"KEY"`
 }
 
-func getVars() Config {
+func getVars() *Config {
 	address := flag.String("a", "localhost:8080", "An address the server will listen to")
 	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
 	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
@@ -39,5 +40,10 @@ func getVars() Config {
 	if cfg.Key == "" {
 		cfg.Key = *key
 	}
-	return cfg
+	return &cfg
+}
+
+func (conf *Config) printConfig() {
+	fmt.Printf("Address: %s; Report Interval: %d; Poll Interval: %d; Key: %s",
+		conf.Address, conf.ReportInterval, conf.PollInterval, conf.Key)
 }
