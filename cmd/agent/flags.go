@@ -15,7 +15,7 @@ type Config struct {
 	Key            string `env:"KEY"`
 }
 
-func getVars() Config {
+func getVars() *Config {
 	address := flag.String("a", "localhost:8080", "An address the server will listen to")
 	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
 	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
@@ -40,7 +40,7 @@ func getVars() Config {
 	if cfg.Key == "" {
 		cfg.Key = *key
 	}
-	return cfg
+	return &cfg
 }
 
 func (conf *Config) printConfig() {

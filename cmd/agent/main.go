@@ -289,7 +289,7 @@ func main() {
 
 	config := getVars()
 
-	addr := addressurl.AddressURL{Protocol: "http", Address: config.Address}
+	addr := addressurl.AddressURL{Protocol: "http", Address: (*config).Address}
 
 	metrics := []string{"Alloc", "BuckHashSys", "Frees", "GCCPUFraction", "GCSys", "HeapAlloc",
 		"HeapIdle", "HeapInuse", "HeapObjects", "HeapReleased", "HeapSys", "LastGC", "Lookups",
@@ -303,7 +303,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration((*config).PollInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {
@@ -322,7 +322,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(time.Duration(config.ReportInterval) * time.Second)
+		ticker := time.NewTicker(time.Duration((*config).ReportInterval) * time.Second)
 		defer ticker.Stop()
 
 		for {
