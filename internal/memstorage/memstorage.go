@@ -193,8 +193,6 @@ func (m *MemStorage) PrintAll() string {
 	m.Mutex.Lock()
 	fmt.Println("Getting all vals")
 	res := ""
-	fmt.Println(len(m.Counters))
-	fmt.Println(len(m.Gauges))
 	if len(m.Counters) > 0 {
 		res += "Counters:\n"
 	}
