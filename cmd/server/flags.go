@@ -31,6 +31,7 @@ func getVars() Config {
 	var cfg Config
 
 	error := env.Parse(&cfg)
+	cfg.printConfig()
 	if error != nil {
 		log.Fatal(error)
 	}
@@ -52,7 +53,7 @@ func getVars() Config {
 	if cfg.Key != "" {
 		cfg.Key = *key
 	}
-
+	cfg.printConfig()
 	return cfg
 }
 
