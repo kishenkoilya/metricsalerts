@@ -51,10 +51,9 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 }
 
 func SendMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-	storage.Mutex.Lock()
-	counters := storage.Counters
-	gauges := storage.Gauges
-	storage.Mutex.Unlock()
+	counters := storage.GetCounters()
+	gauges := storage.GetGauges()
+
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
@@ -75,10 +74,9 @@ func sendMetric(client *resty.Client, addr *addressurl.AddressURL, metric, mType
 }
 
 func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-	storage.Mutex.Lock()
-	counters := storage.Counters
-	gauges := storage.Gauges
-	storage.Mutex.Unlock()
+	counters := storage.GetCounters()
+	gauges := storage.GetGauges()
+
 	len := len(counters) + len(gauges)
 	if len == 0 {
 		return
@@ -128,10 +126,8 @@ func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage)
 }
 
 func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-	storage.Mutex.Lock()
-	counters := storage.Counters
-	gauges := storage.Gauges
-	storage.Mutex.Unlock()
+	counters := storage.GetCounters()
+	gauges := storage.GetGauges()
 
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
@@ -366,9 +362,9 @@ func main() {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
 				// testMass(&addr)
-				SendMetrics(&addr, storage)
+				// SendMetrics(&addr, storage)
 				// SendJSONMetrics(&addr, storage)
-				// SendAllMetrics(&addr, storage)
+				SendAllMetrics(&addr, storage)
 				// client := resty.New().R()
 				// resp, err := client.Get(addr.AddrCommand("ping", "", "", ""))
 				// if err != nil {

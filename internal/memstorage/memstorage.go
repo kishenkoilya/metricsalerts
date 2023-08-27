@@ -169,17 +169,39 @@ func (m *MemStorage) GetGauge(nameG string) (float64, bool) {
 	return res, ok
 }
 
+func (m *MemStorage) GetCounters() map[string]int64 {
+	m.Mutex.Lock()
+	result := make(map[string]int64)
+	for k, v := range m.Counters {
+		result[k] = v
+	}
+	m.Mutex.Unlock()
+	return result
+}
+
+func (m *MemStorage) GetGauges() map[string]float64 {
+	m.Mutex.Lock()
+	result := make(map[string]float64)
+	for k, v := range m.Gauges {
+		result[k] = v
+	}
+	m.Mutex.Unlock()
+	return result
+}
+
 func (m *MemStorage) PrintAll() string {
 	m.Mutex.Lock()
 	fmt.Println("Getting all vals")
 	res := ""
+	fmt.Println(len(m.Counters))
+	fmt.Println(len(m.Gauges))
 	if len(m.Counters) > 0 {
 		res += "Counters:\n"
 	}
 	for k, v := range m.Counters {
 		res += k + ": " + fmt.Sprint(v) + "\n"
 	}
-	if len(m.Counters) > 0 {
+	if len(m.Gauges) > 0 {
 		res += "Gauges:\n"
 	}
 	for k, v := range m.Gauges {
