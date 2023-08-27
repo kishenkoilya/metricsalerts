@@ -152,7 +152,13 @@ func main() {
 	storage := memstorage.NewMemStorage()
 	dbConnFunc := psqlinteraction.NewDBConnection((*config).DatabaseDSN)
 	if (*config).Restore {
-		obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+		var obj interface{}
+		var err error
+		if (*config).DatabaseDSN != "" {
+			obj, err = Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+		} else {
+			err = errors.New("not nil")
+		}
 		if err != nil {
 			fmt.Println(err.Error())
 			consumer, err := filerw.NewConsumer((*config).FilePath)
@@ -202,6 +208,7 @@ func main() {
 			syncFileWriter:  syncFileWriter,
 			psqlConnectLine: &(*config).DatabaseDSN,
 			db:              nil,
+			key:             &(*config).Key,
 		}
 	} else {
 		handlerVars = &HandlerVars{
@@ -209,6 +216,7 @@ func main() {
 			syncFileWriter:  syncFileWriter,
 			psqlConnectLine: &(*config).DatabaseDSN,
 			db:              db,
+			key:             &(*config).Key,
 		}
 	}
 	if db != nil {
@@ -280,7 +288,7 @@ func main() {
 		wg.Wait()
 	}
 	waitForShutdown(server, handlerVars, (*config).FilePath)
-	fmt.Println("Программа завершена")
+	fmt.Println("Programm shutdown")
 }
 
 func waitForShutdown(server *http.Server, handlerVars *HandlerVars, filePath string) {
@@ -301,7 +309,7 @@ func waitForShutdown(server *http.Server, handlerVars *HandlerVars, filePath str
 		}
 		err = server.Shutdown(context.TODO())
 		if err != nil {
-			sugar.Errorf("Ошибка при остановке HTTP-сервера: %v\n", err)
+			sugar.Errorf("Error while stopping HTTP-server: %v\n", err)
 		}
 		err = producer.WriteMemStorage(handlerVars.storage)
 		if err != nil {
@@ -314,5 +322,5 @@ func waitForShutdown(server *http.Server, handlerVars *HandlerVars, filePath str
 			panic(err)
 		}
 	}
-	fmt.Println("HTTP-сервер остановлен.")
+	fmt.Println("HTTP-server shutdown.")
 }

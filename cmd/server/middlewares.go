@@ -19,6 +19,7 @@ type HandlerVars struct {
 	syncFileWriter  *filerw.Producer
 	psqlConnectLine *string
 	db              *psqlinteraction.DBConnection
+	key             *string
 }
 
 func ParamsMiddleware(next httprouter.Handle, handlerVars *HandlerVars) httprouter.Handle {

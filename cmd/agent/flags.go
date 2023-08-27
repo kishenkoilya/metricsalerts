@@ -44,6 +44,6 @@ func getVars() *Config {
 }
 
 func (conf *Config) printConfig() {
-	fmt.Printf("Address: %s; Report Interval: %d; Poll Interval: %d; Key: %s",
+	fmt.Printf("Address: %s; Report Interval: %d; Poll Interval: %d; Key: %s\n",
 		conf.Address, conf.ReportInterval, conf.PollInterval, conf.Key)
 }

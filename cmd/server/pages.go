@@ -2,8 +2,11 @@ package main
 
 import (
 	"compress/gzip"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -116,8 +119,22 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		}
 	}
 
+	bodyBytes, err := io.ReadAll(reqBody)
+	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		return
+	}
+
+	if headerSign := r.Header.Get("HashSHA256"); headerSign != "" {
+		sign := generateHMACSHA256(bodyBytes, *handlerVars.key)
+		if sign != headerSign {
+			http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	err := json.NewDecoder(reqBody).Decode(&req)
+	err = json.Unmarshal(bodyBytes, &req)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
@@ -167,7 +184,21 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		}
 	}
 
-	err := json.NewDecoder(reqBody).Decode(&req)
+	bodyBytes, err := io.ReadAll(reqBody)
+	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		return
+	}
+
+	if headerSign := r.Header.Get("HashSHA256"); headerSign != "" {
+		sign := generateHMACSHA256(bodyBytes, *handlerVars.key)
+		if sign != headerSign {
+			http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
+			return
+		}
+	}
+
+	err = json.Unmarshal(bodyBytes, &req)
 	if err != nil {
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
@@ -226,8 +257,23 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		}
 	}
 
-	err := json.NewDecoder(reqBody).Decode(&req)
+	bodyBytes, err := io.ReadAll(reqBody)
 	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusInternalServerError)
+		return
+	}
+
+	if headerSign := r.Header.Get("HashSHA256"); headerSign != "" {
+		sign := generateHMACSHA256(bodyBytes, *handlerVars.key)
+		if sign != headerSign {
+			http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
+			return
+		}
+	}
+
+	err = json.Unmarshal(bodyBytes, &req)
+	if err != nil {
+		fmt.Println("Falls here")
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
@@ -260,4 +306,10 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 
 	w.WriteHeader(statusRes)
 	w.Write(respJSON)
+}
+
+func generateHMACSHA256(data []byte, key string) string {
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write(data)
+	return fmt.Sprintf("%x", h.Sum(nil))
 }

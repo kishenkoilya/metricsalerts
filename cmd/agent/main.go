@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,7 +66,7 @@ func sendMetric(client *resty.Client, addr *addressurl.AddressURL, metric, mType
 	printResponse(resp, err, "sendMetric")
 }
 
-func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage, key string) {
 	counters := storage.GetCounters()
 	gauges := storage.GetGauges()
 
@@ -101,7 +103,8 @@ func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage)
 			DisableCompression: true,
 		},
 	})
-	request := makeJSONGZIPRequest(client, metrics)
+	request := makeJSONGZIPRequest(client, metrics, key)
+	fmt.Println(request.Header.Get("HashSHA256"))
 	resp, err := request.Post(addr.AddrCommand("updates", "", "", ""))
 	defer resp.RawBody().Close()
 	printResponse(resp, err, "SendAllMetrics")
@@ -116,7 +119,7 @@ func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage)
 	// }
 }
 
-func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage, key string) {
 	counters := storage.GetCounters()
 	gauges := storage.GetGauges()
 
@@ -126,14 +129,14 @@ func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage
 		},
 	})
 	for metric, value := range counters {
-		sendJSONMetric(client, addr, metric, &value, nil)
+		sendJSONMetric(client, addr, metric, &value, nil, key)
 	}
 	for metric, value := range gauges {
-		sendJSONMetric(client, addr, metric, nil, &value)
+		sendJSONMetric(client, addr, metric, nil, &value, key)
 	}
 }
 
-func sendJSONMetric(client *resty.Client, addr *addressurl.AddressURL, metric string, counter *int64, gauge *float64) {
+func sendJSONMetric(client *resty.Client, addr *addressurl.AddressURL, metric string, counter *int64, gauge *float64, key string) {
 	reqBody := memstorage.Metrics{
 		ID: metric,
 	}
@@ -146,13 +149,13 @@ func sendJSONMetric(client *resty.Client, addr *addressurl.AddressURL, metric st
 	}
 
 	metrics := []memstorage.Metrics{reqBody}
-	request := makeJSONGZIPRequest(client, metrics)
+	request := makeJSONGZIPRequest(client, metrics, key)
 
 	resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
 	printResponse(resp, err, "sendJSONMetric")
 }
 
-func makeJSONGZIPRequest(client *resty.Client, reqBody []memstorage.Metrics) *resty.Request {
+func makeJSONGZIPRequest(client *resty.Client, reqBody []memstorage.Metrics, key string) *resty.Request {
 	var jsonData []byte
 	var err error
 	if len(reqBody) != 1 {
@@ -174,15 +177,25 @@ func makeJSONGZIPRequest(client *resty.Client, reqBody []memstorage.Metrics) *re
 		return nil
 	}
 	gzipWriter.Close()
-
-	return client.R().
+	request := client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetHeader("Accept-Encoding", "gzip").
 		SetBody(&buf)
+	if key != "" {
+		sign := generateHMACSHA256(jsonData, key)
+		request.SetHeader("HashSHA256", string(sign))
+	}
+	return request
 }
 
-func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool) *resty.Response {
+func generateHMACSHA256(data []byte, key string) string {
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write(data)
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool, key string) *resty.Response {
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
@@ -196,6 +209,12 @@ func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bo
 	}
 
 	request := client.R()
+
+	if key != "" {
+		sign := generateHMACSHA256(jsonData, key)
+		request.SetHeader("HashSHA256", string(sign))
+	}
+
 	if usegzip {
 		var buf bytes.Buffer
 		gzipWriter := gzip.NewWriter(&buf)
@@ -331,8 +350,8 @@ func main() {
 				fmt.Println("Sending metrics")
 				// testMass(&addr)
 				SendMetrics(&addr, storage)
-				// SendJSONMetrics(&addr, storage)
-				// SendAllMetrics(&addr, storage)
+				// SendJSONMetrics(&addr, storage, (*config).Key)
+				// SendAllMetrics(&addr, storage, (*config).Key)
 				// client := resty.New().R()
 				// resp, err := client.Get(addr.AddrCommand("ping", "", "", ""))
 				// if err != nil {
@@ -409,7 +428,7 @@ func testMass(addr *addressurl.AddressURL) {
 			DisableCompression: true,
 		},
 	})
-	request := makeJSONGZIPRequest(client, metrics)
+	request := makeJSONGZIPRequest(client, metrics, "")
 	resp, err := request.Post(addr.AddrCommand("updates", "", "", ""))
 	defer resp.RawBody().Close()
 	printResponse(resp, err, "SendAllMetrics")

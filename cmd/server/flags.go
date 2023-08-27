@@ -50,7 +50,7 @@ func getVars() *Config {
 	if cfg.DatabaseDSN == "" {
 		cfg.DatabaseDSN = *psqlLine
 	}
-	if cfg.Key != "" {
+	if cfg.Key == "" {
 		cfg.Key = *key
 	}
 	cfg.printConfig()
@@ -58,6 +58,6 @@ func getVars() *Config {
 }
 
 func (conf *Config) printConfig() {
-	fmt.Printf("Address: %s; Store Interval: %d; File Path: %s; Restore: %t; Database DSN: %s;Key: %s",
+	fmt.Printf("Address: %s; Store Interval: %d; File Path: %s; Restore: %t; Database DSN: %s;Key: %s\n",
 		conf.Address, conf.StoreInterval, conf.FilePath, conf.Restore, conf.DatabaseDSN, conf.Key)
 }
