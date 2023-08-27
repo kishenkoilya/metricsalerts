@@ -18,7 +18,7 @@ type Config struct {
 	Key           string `env:"KEY"`
 }
 
-func getVars() *Config {
+func getVars() Config {
 	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
 	storeInterval := flag.Int("i", 300, "A time interval for storing metrics in file")
 	filePath := flag.String("f", "/tmp/metrics-db.json", "Path to file where metrics will be stored")
@@ -53,7 +53,7 @@ func getVars() *Config {
 		cfg.Key = *key
 	}
 
-	return &cfg
+	return cfg
 }
 
 func (conf *Config) printConfig() {
