@@ -86,6 +86,22 @@ func (p *Producer) WriteMetric(metric *Metric) error {
 	return p.writer.Flush()
 }
 
+func (p *Producer) WriteMetrics(metrics *[]memstorage.Metrics) error {
+	for _, v := range *metrics {
+		metric := Metric{ID: v.ID, MType: v.MType}
+		if v.Value == nil {
+			metric.MVal = fmt.Sprint(v.Delta)
+		} else {
+			metric.MVal = fmt.Sprint(v.Value)
+		}
+		err := p.WriteMetric(&metric)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *Producer) Close() error {
 	// закрываем файл
 	return p.file.Close()

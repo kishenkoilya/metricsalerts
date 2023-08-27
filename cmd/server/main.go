@@ -19,21 +19,37 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v6"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx"
 	"github.com/julienschmidt/httprouter"
 	"github.com/kishenkoilya/metricsalerts/internal/filerw"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
+	"github.com/kishenkoilya/metricsalerts/internal/psqlinteraction"
 	"go.uber.org/zap"
 )
 
-var storage *memstorage.MemStorage
 var sugar zap.SugaredLogger
-var syncFileWriter *filerw.Producer
 
 type Config struct {
 	Address       string `env:"ADDRESS"`
 	StoreInterval int    `env:"STORE_INTERVAL"`
 	FilePath      string `env:"FILE_STORAGE_PATH"`
 	Restore       bool   `env:"RESTORE"`
+	DatabaseDSN   string `env:"DATABASE_DSN"`
+}
+
+type HandlerVars struct {
+	storage         *memstorage.MemStorage
+	syncFileWriter  *filerw.Producer
+	psqlConnectLine *string
+	db              *psqlinteraction.DBConnection
+}
+
+func ParamsMiddleware(next httprouter.Handle, handlerVars *HandlerVars) httprouter.Handle {
+	return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+		ctx := context.WithValue(r.Context(), HandlerVars{}, handlerVars)
+		next(w, r.WithContext(ctx), ps)
+	})
 }
 
 func LoggingMiddleware(next httprouter.Handle) httprouter.Handle {
@@ -112,7 +128,48 @@ func (w gzipWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
+func Retrypg(errClass string, f psqlinteraction.RetryFunc) (interface{}, error) {
+	var result interface{}
+	var err error
+
+	for i := 0; i < 3; i++ {
+		result, err = f()
+		if err == nil {
+			return result, nil
+		} else {
+			if pgerr, ok := err.(pgx.PgError); ok {
+				if errCodeCompare(errClass, pgerr.Code) {
+					switch i {
+					case 0:
+						time.Sleep(1 * time.Second)
+					case 1:
+						time.Sleep(3 * time.Second)
+					case 2:
+						time.Sleep(5 * time.Second)
+					default:
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("all %d attempts failed: %w", 3, err)
+}
+
+func errCodeCompare(errClass, errCode string) bool {
+	switch errClass {
+	case pgerrcode.ConnectionException:
+		return pgerrcode.IsConnectionException(errCode)
+	case pgerrcode.OperatorIntervention:
+		return pgerrcode.IsOperatorIntervention(errCode)
+	default:
+		return false
+	}
+}
+
 func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("printAllPage")
 	path := strings.Trim(r.URL.Path, "/")
 	if path != "" {
@@ -120,11 +177,12 @@ func printAllPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) 
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(storage.PrintAll()))
+	w.Write([]byte(handlerVars.storage.PrintAll()))
 	w.WriteHeader(http.StatusOK)
 }
 
 func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("getPage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
@@ -137,26 +195,31 @@ func getPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error validating type and name", statusRes)
 		return
 	}
-	statusRes, body = getValue(storage, mType, mName)
+	statusRes, body = getValue(handlerVars.storage, mType, mName)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("getValue error: ", err.Error())
 		http.Error(w, "Error getting value", statusRes)
 		return
 	}
-	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-	// 	c.Response.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(c.Response)
-	// 	defer gz.Close()
-	// 	_, err := gz.Write([]byte(body))
-	// 	if err != nil {
-	// 		sugar.Errorln("gzip write failed: ", err.Error())
-	// 	}
-	// }
+
 	w.Write([]byte(body))
 	w.WriteHeader(statusRes)
 }
 
+func pingPostgrePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
+	sugar.Infoln("pingPostgrePage")
+	dbPingFunc := psqlinteraction.PingPSQL(*handlerVars.psqlConnectLine)
+	_, err := Retrypg(pgerrcode.OperatorIntervention, dbPingFunc)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("updatePage")
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
@@ -169,27 +232,30 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "Error validating type and name", statusRes)
 		return
 	}
-	statusRes = saveValue(storage, mType, mName, mVal)
+	metric := memstorage.NewMetric(mType, mName, mVal)
+	if metric == nil {
+		http.Error(w, "Error parsing value", http.StatusBadRequest)
+		return
+	}
+	statusRes, metric = handlerVars.storage.SaveMetric(metric)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("saveValue error: ", err.Error())
 		http.Error(w, "Error parsing value", statusRes)
 		return
 	}
-
-	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-	// 	c.Response.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(c.Response)
-	// 	defer gz.Close()
-	// 	_, err := gz.Write([]byte(body))
-	// 	if err != nil {
-	// 		sugar.Errorln("gzip write failed: ", err.Error())
-	// 	}
-	// }
+	statusRes = writeValue(handlerVars, mType, mName, mVal)
+	if statusRes != http.StatusOK {
+		// sugar.Errorln("saveValue error: ", err.Error())
+		http.Error(w, "Error writing value to storage", statusRes)
+		return
+	}
+	body += metric.StringMetric()
 	w.Write([]byte(body))
 	w.WriteHeader(statusRes)
 }
 
 func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("getJSONPage")
 	var statusRes int
 	var req memstorage.Metrics
@@ -211,15 +277,7 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
-
-	// for k, v := range c.Request.Header {
-	// 	fmt.Print(k + ": ")
-	// 	for _, s := range v {
-	// 		fmt.Print(fmt.Sprint(s))
-	// 	}
-	// 	fmt.Print("\n")
-	// }
-	// req.PrintMetrics()
+	req.PrintMetric()
 
 	_, err = validateValues(req.MType, req.ID)
 	resp := &memstorage.Metrics{}
@@ -228,12 +286,13 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 
-	statusRes, resp = storage.GetMetrics(req.MType, req.ID)
+	statusRes, resp = handlerVars.storage.GetMetrics(req.MType, req.ID)
 	if statusRes != http.StatusOK {
 		// sugar.Errorln("storage.GetMetrics failed: ", statusRes)
 		w.WriteHeader(statusRes)
 		return
 	}
+	resp.PrintMetric()
 
 	respJSON, err := json.Marshal(resp)
 	if err != nil {
@@ -241,20 +300,13 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
 	}
-	// if strings.Contains(c.Request.Header.Get("Accept-Encoding"), "gzip") {
-	// 	c.Response.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(c.Response)
-	// 	defer gz.Close()
-	// 	_, err := gz.Write(respJSON)
-	// 	if err != nil {
-	// 		sugar.Errorln("gzip write failed: ", err.Error())
-	// 	}
-	// }
+
+	w.WriteHeader(statusRes)
 	w.Write(respJSON)
-	// w.WriteHeader(statusRes)
 }
 
 func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
 	sugar.Infoln("updateJSONPage")
 	var statusRes int
 	var req *memstorage.Metrics
@@ -283,27 +335,86 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
 		return
 	}
-	statusRes, req = storage.SaveMetrics(req)
+	statusRes, req = handlerVars.storage.SaveMetric(req)
 	if statusRes != http.StatusOK {
 		http.Error(w, "storage.SaveMetrics failed", statusRes)
 		return
 	}
-	respJSON, err := json.Marshal(req)
+	var mVal string
+	if req.Delta != nil {
+		mVal = fmt.Sprint(req.Delta)
+	} else {
+		mVal = fmt.Sprint(req.Value)
+	}
+	statusRes = writeValue(handlerVars, mType, mName, mVal)
+	if statusRes != http.StatusOK {
+		// sugar.Errorln("saveValue error: ", err.Error())
+		http.Error(w, "Error writing value to storage", statusRes)
+		return
+	}
+	respJSON, err := json.Marshal(&req)
 	if err != nil {
 		http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
 		return
 	}
-	// if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-	// 	w.Header().Set("Content-Encoding", "gzip")
-	// 	gz := gzip.NewWriter(w)
-	// 	defer gz.Close()
-	// 	gz.Write(respJSON)
-	// 	return
-	// }
+
 	sugar.Infoln(string(respJSON))
 
+	w.WriteHeader(statusRes)
 	w.Write(respJSON)
-	// w.WriteHeader(statusRes)
+}
+
+func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	handlerVars := r.Context().Value(HandlerVars{}).(*HandlerVars)
+	sugar.Infoln("massUpdatePage")
+	var statusRes int
+	var req *[]memstorage.Metrics
+	w.Header().Set("Content-Type", "application/json")
+
+	reqBody := r.Body
+	if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {
+		var err error
+		reqBody, err = gzip.NewReader(reqBody)
+		if err != nil {
+			http.Error(w, "gzip.NewReader failed", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	err := json.NewDecoder(reqBody).Decode(&req)
+	if err != nil {
+		http.Error(w, "json.Marshal failed", http.StatusBadRequest)
+		return
+	}
+	// for _, val := range *req {
+	// 	val.PrintMetric()
+	// }
+
+	statusRes, resp := handlerVars.storage.SaveMetrics(req)
+	if statusRes != http.StatusOK {
+		http.Error(w, "storage.SaveMetrics failed", statusRes)
+		return
+	}
+	fmt.Println("printing response: ")
+	for _, val := range *resp {
+		val.PrintMetric()
+	}
+	statusRes = writeValues(handlerVars, resp)
+	if statusRes != http.StatusOK {
+		http.Error(w, "writeValues failed", statusRes)
+		return
+	}
+	resp1 := (*resp)[0]
+	respJSON, err := json.Marshal(&resp1)
+	if err != nil {
+		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
+		return
+	}
+
+	sugar.Infoln(string(respJSON))
+
+	w.WriteHeader(statusRes)
+	w.Write(respJSON)
 }
 
 func validateValues(mType, mName string) (int, error) {
@@ -322,22 +433,42 @@ func validateValues(mType, mName string) (int, error) {
 	return http.StatusOK, nil
 }
 
-func saveValue(storage *memstorage.MemStorage, mType, mName, mVal string) int {
-	if mType == "counter" {
-		res, err := strconv.ParseInt(mVal, 0, 64)
+func writeValue(handlerVars *HandlerVars, mType, mName, mVal string) int {
+	if handlerVars.db != nil {
+		sugar.Infoln("Writing metric to db")
+		dbWriteMetricFunc := handlerVars.db.WriteMetric(mType, mName, mVal)
+		_, err := Retrypg(pgerrcode.ConnectionException, dbWriteMetricFunc)
 		if err != nil {
-			return http.StatusBadRequest
+			fmt.Println(err.Error())
+			return http.StatusInternalServerError
 		}
-		storage.PutCounter(mName, res)
-	} else if mType == "gauge" {
-		res, err := strconv.ParseFloat(mVal, 64)
+	} else if handlerVars.syncFileWriter != nil {
+		sugar.Infoln("Writing metric to file")
+		err := handlerVars.syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
 		if err != nil {
-			return http.StatusBadRequest
+			fmt.Println(err.Error())
+			return http.StatusInternalServerError
 		}
-		storage.PutGauge(mName, res)
 	}
-	if syncFileWriter != nil {
-		syncFileWriter.WriteMetric(&filerw.Metric{ID: mName, MType: mType, MVal: mVal})
+	return http.StatusOK
+}
+
+func writeValues(handlerVars *HandlerVars, metrics *[]memstorage.Metrics) int {
+	if handlerVars.db != nil {
+		sugar.Infoln("Writing metrics to db")
+		dbWriteMetricsFunc := handlerVars.db.WriteMetrics(metrics)
+		_, err := Retrypg(pgerrcode.ConnectionException, dbWriteMetricsFunc)
+		if err != nil {
+			fmt.Println(err.Error())
+			return http.StatusInternalServerError
+		}
+	} else if handlerVars.syncFileWriter != nil {
+		sugar.Infoln("Writing metric to file")
+		err := handlerVars.syncFileWriter.WriteMetrics(metrics)
+		if err != nil {
+			fmt.Println(err.Error())
+			return http.StatusInternalServerError
+		}
 	}
 	return http.StatusOK
 }
@@ -361,11 +492,12 @@ func getValue(storage *memstorage.MemStorage, mType, mName string) (int, string)
 	return status, res
 }
 
-func getVars() (string, int, string, bool) {
+func getVars() (string, int, string, bool, string) {
 	addr := flag.String("a", "localhost:8080", "An address the server will listen to")
 	storeInterval := flag.Int("i", 300, "A time interval for storing metrics in file")
 	filePath := flag.String("f", "/tmp/metrics-db.json", "Path to file where metrics will be stored")
 	restore := flag.Bool("r", true, "A flag that determines wether server will download metrics from file upon start")
+	psqlLine := flag.String("d", "", "A string that contains info to connect to psql")
 
 	flag.Parse()
 
@@ -387,41 +519,102 @@ func getVars() (string, int, string, bool) {
 	if _, err := os.LookupEnv("RESTORE"); err {
 		restore = &cfg.Restore
 	}
-	return *addr, *storeInterval, *filePath, *restore
+	if cfg.DatabaseDSN != "" {
+		psqlLine = &cfg.DatabaseDSN
+	}
+	return *addr, *storeInterval, *filePath, *restore, *psqlLine
 }
 
 func main() {
 	ctx := context.Background()
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		// вызываем панику, если ошибка
 		panic(err)
 	}
 	defer logger.Sync()
 
-	// делаем регистратор SugaredLogger
 	sugar = *logger.Sugar()
 
-	addr, storeInterval, filePath, restore := getVars()
-	fmt.Println(addr, storeInterval, filePath, restore)
-	storage = memstorage.NewMemStorage()
+	addr, storeInterval, filePath, restore, psqlLine := getVars()
+	fmt.Println(addr, storeInterval, filePath, restore, psqlLine)
+	storage := memstorage.NewMemStorage()
+	dbConnFunc := psqlinteraction.NewDBConnection(psqlLine)
 	if restore {
-		_, err := os.Open(filePath)
-		if err == nil {
+		obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+		if err != nil {
+			fmt.Println(err.Error())
 			consumer, err := filerw.NewConsumer(filePath)
 			if err == nil {
 				storage, _ = consumer.ReadMemStorage()
 				fmt.Println(storage.PrintAll())
 			}
+		} else {
+			var db *psqlinteraction.DBConnection
+			if obj != nil {
+				db = obj.(*psqlinteraction.DBConnection)
+			}
+			dbReadMemFunc := db.ReadMemStorage()
+			obj, err := Retrypg(pgerrcode.ConnectionException, dbReadMemFunc)
+			if obj != nil {
+				storage = obj.(*memstorage.MemStorage)
+			}
+			if err == nil {
+				fmt.Println(storage.PrintAll())
+			} else {
+				consumer, err := filerw.NewConsumer(filePath)
+				if err == nil {
+					storage, _ = consumer.ReadMemStorage()
+					fmt.Println(storage.PrintAll())
+				}
+			}
+		}
+	}
+
+	// psqlLine = "host=localhost port=5432 user=postgres password=gpadmin dbname=postgres"
+	var handlerVars *HandlerVars
+	syncFileWriter, err := filerw.NewProducer(filePath, false)
+	if err != nil {
+		sugar.Fatalw(err.Error(), "event", "Init file writer")
+	}
+	if storeInterval != 0 {
+		syncFileWriter = nil
+	}
+	obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+	var db *psqlinteraction.DBConnection
+	if obj != nil {
+		db = obj.(*psqlinteraction.DBConnection)
+	}
+	if err != nil || storeInterval != 0 {
+		handlerVars = &HandlerVars{
+			storage:         storage,
+			syncFileWriter:  syncFileWriter,
+			psqlConnectLine: &psqlLine,
+			db:              nil,
+		}
+	} else {
+		handlerVars = &HandlerVars{
+			storage:         storage,
+			syncFileWriter:  syncFileWriter,
+			psqlConnectLine: &psqlLine,
+			db:              db,
+		}
+	}
+	if db != nil {
+		dbInitFunc := db.InitTables()
+		_, err := Retrypg(pgerrcode.ConnectionException, dbInitFunc)
+		if err != nil {
+			sugar.Fatalw(err.Error(), "event", "init DB")
 		}
 	}
 
 	router := httprouter.New()
-	router.GET("/", LoggingMiddleware(GzipMiddleware(printAllPage)))
-	router.GET("/value/:mType/:mName", LoggingMiddleware(GzipMiddleware(getPage)))
-	router.POST("/update/:mType/:mName/:mVal", LoggingMiddleware(GzipMiddleware(updatePage)))
-	router.POST("/value/", LoggingMiddleware(GzipMiddleware(getJSONPage)))
-	router.POST("/update/", LoggingMiddleware(GzipMiddleware(updateJSONPage)))
+	router.GET("/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(printAllPage, handlerVars))))
+	router.GET("/value/:mType/:mName", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(getPage, handlerVars))))
+	router.GET("/ping", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(pingPostgrePage, handlerVars))))
+	router.POST("/update/:mType/:mName/:mVal", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updatePage, handlerVars))))
+	router.POST("/value/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(getJSONPage, handlerVars))))
+	router.POST("/update/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(updateJSONPage, handlerVars))))
+	router.POST("/updates/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(massUpdatePage, handlerVars))))
 
 	server := &http.Server{
 		Addr:    addr,
@@ -433,12 +626,8 @@ func main() {
 			sugar.Fatalw(err.Error(), "event", "start server")
 		}
 	}()
-	if storeInterval == 0 {
-		syncFileWriter, err = filerw.NewProducer(filePath, false)
-		if err != nil {
-			sugar.Fatalw(err.Error(), "event", "init file writer")
-		}
-	} else {
+
+	if storeInterval != 0 {
 		var wg sync.WaitGroup
 		wg.Add(10)
 		go func() {
@@ -450,13 +639,26 @@ func main() {
 				select {
 				case <-ticker.C:
 					fmt.Println("Saving to storage")
-					producer, err := filerw.NewProducer(filePath, true)
-					if err != nil {
-						sugar.Fatalw(err.Error(), "event", "init file writer")
+					obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+					var db *psqlinteraction.DBConnection
+					if obj != nil {
+						db = obj.(*psqlinteraction.DBConnection)
 					}
-					err = producer.WriteMemStorage(storage)
 					if err != nil {
-						panic(err)
+						producer, err := filerw.NewProducer(filePath, true)
+						if err != nil {
+							sugar.Fatalw(err.Error(), "event", "init file writer")
+						}
+						err = producer.WriteMemStorage(storage)
+						if err != nil {
+							panic(err)
+						}
+					} else {
+						dbWriteMemFunc := db.WriteMemStorage(storage)
+						_, err = Retrypg(pgerrcode.ConnectionException, dbWriteMemFunc)
+						if err != nil {
+							panic(err)
+						}
 					}
 				case <-ctx.Done():
 					return
@@ -465,26 +667,40 @@ func main() {
 		}()
 		wg.Wait()
 	}
-	waitForShutdown(server, filePath)
+	waitForShutdown(server, handlerVars, filePath)
 	fmt.Println("Программа завершена")
 }
 
-func waitForShutdown(server *http.Server, filePath string) {
+func waitForShutdown(server *http.Server, handlerVars *HandlerVars, filePath string) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-signalChan
-	producer, err := filerw.NewProducer(filePath, true)
-	if err != nil {
-		sugar.Fatalw(err.Error(), "event", "init file writer")
+	dbConnFunc := psqlinteraction.NewDBConnection(*handlerVars.psqlConnectLine)
+	obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
+	var db *psqlinteraction.DBConnection
+	if obj != nil {
+		db = obj.(*psqlinteraction.DBConnection)
 	}
-	err = server.Shutdown(context.TODO())
 	if err != nil {
-		sugar.Errorf("Ошибка при остановке HTTP-сервера: %v\n", err)
-	}
-	err = producer.WriteMemStorage(storage)
-	if err != nil {
-		sugar.Errorln(err.Error())
+		producer, err := filerw.NewProducer(filePath, true)
+		if err != nil {
+			sugar.Fatalw(err.Error(), "event", "init file writer")
+		}
+		err = server.Shutdown(context.TODO())
+		if err != nil {
+			sugar.Errorf("Ошибка при остановке HTTP-сервера: %v\n", err)
+		}
+		err = producer.WriteMemStorage(handlerVars.storage)
+		if err != nil {
+			sugar.Errorln(err.Error())
+		}
+	} else {
+		dbWriteMemFunc := db.WriteMemStorage(handlerVars.storage)
+		_, err = Retrypg(pgerrcode.ConnectionException, dbWriteMemFunc)
+		if err != nil {
+			panic(err)
+		}
 	}
 	fmt.Println("HTTP-сервер остановлен.")
 }

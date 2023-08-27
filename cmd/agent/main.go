@@ -71,20 +71,60 @@ func SendMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
 func sendMetric(client *resty.Client, addr *addressurl.AddressURL, metric, mType, value string) {
 	cli := client.R()
 	resp, err := cli.Post(addr.AddrCommand("update", mType, metric, fmt.Sprint(value)))
-	fmt.Println(cli.RawRequest.URL)
-	if err != nil {
-		fmt.Println("SendCounters error: " + fmt.Sprint(err))
-	} else {
-		fmt.Println(resp.Proto() + " " + resp.Status())
-		for k, v := range resp.Header() {
-			fmt.Print(k + ": ")
-			for _, s := range v {
-				fmt.Print(fmt.Sprint(s))
-			}
-			fmt.Print("\n")
-		}
-		fmt.Println(string(resp.Body()))
+	printResponse(resp, err, "sendMetric")
+}
+
+func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
+	storage.Mutex.Lock()
+	counters := storage.Counters
+	gauges := storage.Gauges
+	storage.Mutex.Unlock()
+	len := len(counters) + len(gauges)
+	if len == 0 {
+		return
 	}
+
+	metrics := make([]memstorage.Metrics, len)
+	iter := 0
+	for m, v := range counters {
+		val := v
+		metrics[iter] = memstorage.Metrics{
+			ID:    m,
+			MType: "counter",
+			Value: nil,
+			Delta: &val,
+		}
+		iter++
+	}
+	for m, v := range gauges {
+		val := v
+		metrics[iter] = memstorage.Metrics{
+			ID:    m,
+			MType: "gauge",
+			Value: &val,
+			Delta: nil,
+		}
+		iter++
+	}
+
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
+	request := makeJSONGZIPRequest(client, metrics)
+	resp, err := request.Post(addr.AddrCommand("updates", "", "", ""))
+	defer resp.RawBody().Close()
+	printResponse(resp, err, "SendAllMetrics")
+	// fmt.Println("result print")
+	// var result []memstorage.Metrics
+	// err = json.Unmarshal(resp.Body(), &result)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// }
+	// for _, v := range result {
+	// 	v.PrintMetric()
+	// }
 }
 
 func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
@@ -118,10 +158,25 @@ func sendJSONMetric(client *resty.Client, addr *addressurl.AddressURL, metric st
 		reqBody.Delta = counter
 	}
 
-	jsonData, err := json.Marshal(reqBody)
+	metrics := []memstorage.Metrics{reqBody}
+	request := makeJSONGZIPRequest(client, metrics)
+
+	resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
+	printResponse(resp, err, "sendJSONMetric")
+}
+
+func makeJSONGZIPRequest(client *resty.Client, reqBody []memstorage.Metrics) *resty.Request {
+	var jsonData []byte
+	var err error
+	if len(reqBody) != 1 {
+		jsonData, err = json.Marshal(reqBody)
+	} else {
+		jsonData, err = json.Marshal(reqBody[0])
+	}
+	fmt.Println(string(jsonData))
 	if err != nil {
 		fmt.Println(err)
-		return
+		return nil
 	}
 
 	var buf bytes.Buffer
@@ -129,45 +184,15 @@ func sendJSONMetric(client *resty.Client, addr *addressurl.AddressURL, metric st
 	_, err = gzipWriter.Write(jsonData)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return nil
 	}
 	gzipWriter.Close()
 
-	request := client.R().
+	return client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetHeader("Accept-Encoding", "gzip").
 		SetBody(&buf)
-
-	resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
-	fmt.Println(resp.Proto() + " " + resp.Status())
-	for k, v := range resp.Header() {
-		fmt.Print(k + ": ")
-		for _, s := range v {
-			fmt.Print(fmt.Sprint(s))
-		}
-		fmt.Print("\n")
-	}
-	if err != nil {
-		fmt.Println("SendJSONMetrics error: " + fmt.Sprint(err))
-	} else {
-		fmt.Println(resp.Proto() + " " + resp.Status())
-		for k, v := range resp.Header() {
-			fmt.Print(k + ": ")
-			for _, s := range v {
-				fmt.Print(fmt.Sprint(s))
-			}
-			fmt.Print("\n")
-		}
-	}
-	fmt.Println(string(resp.Body()))
-	// if strings.Contains(resp.Header().Get("Content-Encoding"), "gzip") {
-	// 	responseData, err := decompressGzipResponse(resp.Body())
-	// 	if err != nil {
-	// 		fmt.Println("Error decompressing response:", err.Error())
-	// 	}
-	// 	fmt.Println(string(responseData))
-	// }
 }
 
 func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bool) *resty.Response {
@@ -204,19 +229,7 @@ func getJSONMetrics(mType, mName string, addr *addressurl.AddressURL, usegzip bo
 		SetBody(jsonData)
 
 	resp, err := request.Post(addr.AddrCommand("value", "", "", ""))
-	if err != nil {
-		fmt.Println("Error posting:", err.Error())
-	}
-
-	fmt.Println("request.Header:")
-	for k, v := range request.Header {
-		fmt.Print(k + ": ")
-		for _, s := range v {
-			fmt.Print(fmt.Sprint(s))
-		}
-		fmt.Print("\n")
-	}
-	fmt.Println(string(resp.Body()))
+	printResponse(resp, err, "getJSONMetrics")
 	return resp
 }
 
@@ -246,10 +259,40 @@ func getAllMetrics(addr *addressurl.AddressURL) *resty.Response {
 		},
 	})
 	resp, err := client.R().Get(addr.AddrEmpty())
-	if err != nil {
-		fmt.Println(err)
-	}
+	printResponse(resp, err, "getAllMetrics")
 	return resp
+}
+
+func printResponse(resp *resty.Response, err error, funcName string) {
+	fmt.Println(resp.Request.URL)
+	fmt.Println(resp.Proto() + " " + resp.Status())
+	for k, v := range resp.Header() {
+		fmt.Print(k + ": ")
+		for _, s := range v {
+			fmt.Print(fmt.Sprint(s))
+		}
+		fmt.Print("\n")
+	}
+	if err != nil {
+		fmt.Println(funcName + " error: " + fmt.Sprint(err))
+	} else {
+		fmt.Println(resp.Proto() + " " + resp.Status())
+		for k, v := range resp.Header() {
+			fmt.Print(k + ": ")
+			for _, s := range v {
+				fmt.Print(fmt.Sprint(s))
+			}
+			fmt.Print("\n")
+		}
+	}
+	fmt.Println(string(resp.Body()))
+	// if strings.Contains(resp.Header().Get("Content-Encoding"), "gzip") {
+	// 	responseData, err := decompressGzipResponse(resp.Body())
+	// 	if err != nil {
+	// 		fmt.Println("Error decompressing response:", err.Error())
+	// 	}
+	// 	fmt.Println(string(responseData))
+	// }
 }
 
 func getVars() (string, int, int) {
@@ -322,7 +365,28 @@ func main() {
 			select {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
+				// testMass(&addr)
 				SendMetrics(&addr, storage)
+				// SendJSONMetrics(&addr, storage)
+				// SendAllMetrics(&addr, storage)
+				// client := resty.New().R()
+				// resp, err := client.Get(addr.AddrCommand("ping", "", "", ""))
+				// if err != nil {
+				// 	fmt.Println(err.Error())
+				// }
+				// fmt.Println(client.URL)
+				// fmt.Println(string(resp.Body()))
+				// // fmt.Println(client.RawRequest.URL)
+				// fmt.Println(resp.Proto() + " " + resp.Status())
+				// for k, v := range resp.Header() {
+				// 	fmt.Print(k + ": ")
+				// 	for _, s := range v {
+				// 		fmt.Print(fmt.Sprint(s))
+				// 	}
+				// 	fmt.Print("\n")
+				// }
+				// time.Sleep(1 * time.Second)
+
 				// resp := getAllMetrics(&addr)
 				// fmt.Println(string(resp.Body()))
 				// fmt.Println("all metr")
@@ -355,4 +419,44 @@ func main() {
 	wg.Wait()
 
 	fmt.Println("Программа завершена")
+}
+
+func testMass(addr *addressurl.AddressURL) {
+	delta1 := int64(837942796)
+	value1 := float64(943708.7207719209)
+	delta2 := int64(357569249)
+	value2 := float64(31800.67860827374)
+	delta3 := int64(837942796)
+	value3 := float64(943708.7207719209)
+	delta4 := int64(357569249)
+	value4 := float64(31800.67860827374)
+	metrics := []memstorage.Metrics{
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta1},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value1},
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta2},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value2},
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta3},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value3},
+		{ID: "CounterBatchZip23", MType: "counter", Delta: &delta4},
+		{ID: "GaugeBatchZip142", MType: "gauge", Value: &value4},
+	}
+	client := resty.NewWithClient(&http.Client{
+		Transport: &http.Transport{
+			DisableCompression: true,
+		},
+	})
+	request := makeJSONGZIPRequest(client, metrics)
+	resp, err := request.Post(addr.AddrCommand("updates", "", "", ""))
+	defer resp.RawBody().Close()
+	printResponse(resp, err, "SendAllMetrics")
+	fmt.Println("result print")
+	var result []memstorage.Metrics
+	err = json.Unmarshal(resp.Body(), &result)
+	if err != nil {
+		fmt.Println(err)
+	}
+	for _, v := range result {
+		v.PrintMetric()
+	}
+
 }
