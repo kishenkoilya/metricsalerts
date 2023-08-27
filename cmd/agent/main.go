@@ -341,9 +341,9 @@ func main() {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
 				// testMass(&addr)
-				// SendMetrics(&addr, storage)
+				SendMetrics(&addr, storage)
 				// SendJSONMetrics(&addr, storage, (*config).Key)
-				SendAllMetrics(&addr, storage, (*config).Key)
+				// SendAllMetrics(&addr, storage, (*config).Key)
 				// client := resty.New().R()
 				// resp, err := client.Get(addr.AddrCommand("ping", "", "", ""))
 				// if err != nil {
