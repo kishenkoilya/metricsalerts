@@ -6,10 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"reflect"
@@ -17,17 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/caarlos0/env/v6"
 	"github.com/go-resty/resty/v2"
 	"github.com/kishenkoilya/metricsalerts/internal/addressurl"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
 )
-
-type Config struct {
-	Address        string `env:"ADDRESS"`
-	ReportInterval int    `env:"REPORT_INTERVAL"`
-	PollInterval   int    `env:"POLL_INTERVAL"`
-}
 
 func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.MemStorage) error {
 	runtime.ReadMemStats(m)
@@ -289,29 +280,6 @@ func printResponse(resp *resty.Response, err error, funcName string) {
 	// 	}
 	// 	fmt.Println(string(responseData))
 	// }
-}
-
-func getVars() (string, int, int) {
-	address := flag.String("a", "localhost:8080", "An address the server will listen to")
-	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
-	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
-	flag.Parse()
-
-	var cfg Config
-	error := env.Parse(&cfg)
-	if error != nil {
-		log.Fatal(error)
-	}
-	if cfg.Address != "" {
-		address = &cfg.Address
-	}
-	if cfg.ReportInterval != 0 {
-		reportInterval = &cfg.ReportInterval
-	}
-	if cfg.PollInterval != 0 {
-		pollInterval = &cfg.PollInterval
-	}
-	return *address, *reportInterval, *pollInterval
 }
 
 func main() {
