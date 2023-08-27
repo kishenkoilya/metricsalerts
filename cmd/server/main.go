@@ -150,12 +150,12 @@ func main() {
 
 	config := getVars()
 	storage := memstorage.NewMemStorage()
-	dbConnFunc := psqlinteraction.NewDBConnection(config.DatabaseDSN)
-	if config.Restore {
+	dbConnFunc := psqlinteraction.NewDBConnection((*config).DatabaseDSN)
+	if (*config).Restore {
 		obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
 		if err != nil {
 			fmt.Println(err.Error())
-			consumer, err := filerw.NewConsumer(config.FilePath)
+			consumer, err := filerw.NewConsumer((*config).FilePath)
 			if err == nil {
 				storage, _ = consumer.ReadMemStorage()
 				fmt.Println(storage.PrintAll())
@@ -173,7 +173,7 @@ func main() {
 			if err == nil {
 				fmt.Println(storage.PrintAll())
 			} else {
-				consumer, err := filerw.NewConsumer(config.FilePath)
+				consumer, err := filerw.NewConsumer((*config).FilePath)
 				if err == nil {
 					storage, _ = consumer.ReadMemStorage()
 					fmt.Println(storage.PrintAll())
@@ -184,11 +184,11 @@ func main() {
 
 	// psqlLine = "host=localhost port=5432 user=postgres password=gpadmin dbname=postgres"
 	var handlerVars *HandlerVars
-	syncFileWriter, err := filerw.NewProducer(config.FilePath, false)
+	syncFileWriter, err := filerw.NewProducer((*config).FilePath, false)
 	if err != nil {
 		sugar.Fatalw(err.Error(), "event", "Init file writer")
 	}
-	if config.StoreInterval != 0 {
+	if (*config).StoreInterval != 0 {
 		syncFileWriter = nil
 	}
 	obj, err := Retrypg(pgerrcode.OperatorIntervention, dbConnFunc)
@@ -196,18 +196,18 @@ func main() {
 	if obj != nil {
 		db = obj.(*psqlinteraction.DBConnection)
 	}
-	if err != nil || config.StoreInterval != 0 {
+	if err != nil || (*config).StoreInterval != 0 {
 		handlerVars = &HandlerVars{
 			storage:         storage,
 			syncFileWriter:  syncFileWriter,
-			psqlConnectLine: &config.DatabaseDSN,
+			psqlConnectLine: &(*config).DatabaseDSN,
 			db:              nil,
 		}
 	} else {
 		handlerVars = &HandlerVars{
 			storage:         storage,
 			syncFileWriter:  syncFileWriter,
-			psqlConnectLine: &config.DatabaseDSN,
+			psqlConnectLine: &(*config).DatabaseDSN,
 			db:              db,
 		}
 	}
@@ -229,7 +229,7 @@ func main() {
 	router.POST("/updates/", LoggingMiddleware(GzipMiddleware(ParamsMiddleware(massUpdatePage, handlerVars))))
 
 	server := &http.Server{
-		Addr:    config.Address,
+		Addr:    (*config).Address,
 		Handler: router,
 	}
 	go func() {
@@ -239,12 +239,12 @@ func main() {
 		}
 	}()
 
-	if config.StoreInterval != 0 {
+	if (*config).StoreInterval != 0 {
 		var wg sync.WaitGroup
 		wg.Add(10)
 		go func() {
 			defer wg.Done()
-			ticker := time.NewTicker(time.Duration(config.StoreInterval) * time.Second)
+			ticker := time.NewTicker(time.Duration((*config).StoreInterval) * time.Second)
 			defer ticker.Stop()
 
 			for {
@@ -257,7 +257,7 @@ func main() {
 						db = obj.(*psqlinteraction.DBConnection)
 					}
 					if err != nil {
-						producer, err := filerw.NewProducer(config.FilePath, true)
+						producer, err := filerw.NewProducer((*config).FilePath, true)
 						if err != nil {
 							sugar.Fatalw(err.Error(), "event", "init file writer")
 						}
@@ -279,7 +279,7 @@ func main() {
 		}()
 		wg.Wait()
 	}
-	waitForShutdown(server, handlerVars, config.FilePath)
+	waitForShutdown(server, handlerVars, (*config).FilePath)
 	fmt.Println("Программа завершена")
 }
 
