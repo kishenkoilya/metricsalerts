@@ -125,12 +125,9 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 
-	if headerSign := r.Header.Get("HashSHA256"); headerSign != "" {
-		sign := generateHMACSHA256(bodyBytes, *handlerVars.key)
-		if sign != headerSign {
-			http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
-			return
-		}
+	if checkSign(r, bodyBytes, handlerVars) != http.StatusOK {
+		http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -162,7 +159,10 @@ func getJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		http.Error(w, "json.Marshal failed", http.StatusInternalServerError)
 		return
 	}
-
+	if *handlerVars.key != "" {
+		respSign := generateHMACSHA256(respJSON, *handlerVars.key)
+		w.Header().Set("HashSHA256", string(respSign))
+	}
 	w.WriteHeader(statusRes)
 	w.Write(respJSON)
 }
@@ -190,12 +190,9 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		return
 	}
 
-	if headerSign := r.Header.Get("HashSHA256"); headerSign != "" {
-		sign := generateHMACSHA256(bodyBytes, *handlerVars.key)
-		if sign != headerSign {
-			http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
-			return
-		}
+	if checkSign(r, bodyBytes, handlerVars) != http.StatusOK {
+		http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
+		return
 	}
 
 	err = json.Unmarshal(bodyBytes, &req)
@@ -235,7 +232,10 @@ func updateJSONPage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 	}
 
 	sugar.Infoln(string(respJSON))
-
+	if *handlerVars.key != "" {
+		respSign := generateHMACSHA256(respJSON, *handlerVars.key)
+		w.Header().Set("HashSHA256", string(respSign))
+	}
 	w.WriteHeader(statusRes)
 	w.Write(respJSON)
 }
@@ -263,12 +263,9 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		return
 	}
 
-	if headerSign := r.Header.Get("HashSHA256"); headerSign != "" {
-		sign := generateHMACSHA256(bodyBytes, *handlerVars.key)
-		if sign != headerSign {
-			http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
-			return
-		}
+	if checkSign(r, bodyBytes, handlerVars) != http.StatusOK {
+		http.Error(w, "Sign hashes are not equal", http.StatusBadRequest)
+		return
 	}
 
 	err = json.Unmarshal(bodyBytes, &req)
@@ -304,8 +301,23 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 
 	sugar.Infoln(string(respJSON))
 
+	if *handlerVars.key != "" {
+		respSign := generateHMACSHA256(respJSON, *handlerVars.key)
+		w.Header().Set("HashSHA256", string(respSign))
+	}
 	w.WriteHeader(statusRes)
 	w.Write(respJSON)
+}
+
+func checkSign(r *http.Request, bodyBytes []byte, handlerVars *HandlerVars) int {
+	if headerSign := r.Header.Get("HashSHA256"); headerSign != "" && *handlerVars.key != "" {
+		sign := generateHMACSHA256(bodyBytes, *handlerVars.key)
+		if sign != headerSign {
+			println("Sign hashes are not equal")
+			return http.StatusBadRequest
+		}
+	}
+	return http.StatusOK
 }
 
 func generateHMACSHA256(data []byte, key string) string {

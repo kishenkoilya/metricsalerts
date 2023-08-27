@@ -271,14 +271,6 @@ func getAllMetrics(addr *addressurl.AddressURL) *resty.Response {
 
 func printResponse(resp *resty.Response, err error, funcName string) {
 	fmt.Println(resp.Request.URL)
-	fmt.Println(resp.Proto() + " " + resp.Status())
-	for k, v := range resp.Header() {
-		fmt.Print(k + ": ")
-		for _, s := range v {
-			fmt.Print(fmt.Sprint(s))
-		}
-		fmt.Print("\n")
-	}
 	if err != nil {
 		fmt.Println(funcName + " error: " + fmt.Sprint(err))
 	} else {
@@ -349,9 +341,9 @@ func main() {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
 				// testMass(&addr)
-				SendMetrics(&addr, storage)
+				// SendMetrics(&addr, storage)
 				// SendJSONMetrics(&addr, storage, (*config).Key)
-				// SendAllMetrics(&addr, storage, (*config).Key)
+				SendAllMetrics(&addr, storage, (*config).Key)
 				// client := resty.New().R()
 				// resp, err := client.Get(addr.AddrCommand("ping", "", "", ""))
 				// if err != nil {
