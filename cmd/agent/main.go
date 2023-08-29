@@ -17,6 +17,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/mem"
+
 	"github.com/go-resty/resty/v2"
 	"github.com/kishenkoilya/metricsalerts/internal/addressurl"
 	"github.com/kishenkoilya/metricsalerts/internal/memstorage"
@@ -38,32 +41,97 @@ func updateMetrics(m *runtime.MemStats, metrics []string, storage *memstorage.Me
 			return err
 		}
 	}
+
+	v, _ := mem.VirtualMemory()
+
+	storage.PutGauge("TotalMemory", float64(v.Total))
+	storage.PutGauge("FreeMemory", float64(v.Free))
+
+	cpus, err := cpu.Percent(time.Second, true)
+	if err != nil {
+		panic(err)
+	}
+	for i, _ := cpu.Counts(true); i > 0; i-- {
+		storage.PutGauge("CPUutilization"+fmt.Sprint(i), cpus[i-1])
+	}
+
 	storage.PutCounter("PollCount", 1)
 	storage.PutGauge("RandomValue", rand.Float64())
 	return nil
 }
 
-func SendMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage) {
-	counters := storage.GetCounters()
-	gauges := storage.GetGauges()
-
+func SendMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage, key string, rateLimit int, json bool) {
 	client := resty.NewWithClient(&http.Client{
 		Transport: &http.Transport{
 			DisableCompression: true,
 		},
 	})
-	for metric, value := range counters {
-		sendMetric(client, addr, metric, "counter", fmt.Sprint(value))
-	}
-	for metric, value := range gauges {
-		sendMetric(client, addr, metric, "gauge", fmt.Sprint(value))
+	ch := make(chan memstorage.Metrics, rateLimit)
+	go fillMetricsChannel(ch, storage)
+
+	for i := 0; i < rateLimit; i++ {
+		if json {
+			go metricJSONSender(i, client, addr, ch, key)
+		} else {
+			go metricSender(i, client, addr, ch)
+		}
 	}
 }
 
-func sendMetric(client *resty.Client, addr *addressurl.AddressURL, metric, mType, value string) {
+func fillMetricsChannel(ch chan memstorage.Metrics, storage *memstorage.MemStorage) {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		counters := storage.GetCounters()
+		for name := range counters {
+			stat, metric := storage.GetMetrics("counter", name)
+			if stat != http.StatusOK {
+				fmt.Println("Failed to get metric " + name)
+				continue
+			}
+			ch <- *metric
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		gauges := storage.GetGauges()
+		for name := range gauges {
+			stat, metric := storage.GetMetrics("gauge", name)
+			if stat != http.StatusOK {
+				fmt.Println("Failed to get metric " + name)
+				continue
+			}
+			ch <- *metric
+		}
+	}()
+	wg.Wait()
+	close(ch)
+}
+
+func metricSender(id int, client *resty.Client, addr *addressurl.AddressURL, ch chan memstorage.Metrics) {
 	cli := client.R()
-	resp, err := cli.Post(addr.AddrCommand("update", mType, metric, fmt.Sprint(value)))
-	printResponse(resp, err, "sendMetric")
+	for metric := range ch {
+		var value string
+		if metric.MType == "counter" {
+			value = fmt.Sprint(*metric.Delta)
+		} else {
+			value = fmt.Sprint(*metric.Value)
+		}
+		resp, err := cli.Post(addr.AddrCommand("update", metric.MType, metric.ID, value))
+		printResponse(resp, err, "metricSender id: "+fmt.Sprint(id))
+	}
+}
+
+func metricJSONSender(id int, client *resty.Client, addr *addressurl.AddressURL, ch chan memstorage.Metrics, key string) {
+	for metric := range ch {
+		metrics := []memstorage.Metrics{metric}
+		request := makeJSONGZIPRequest(client, metrics, key)
+
+		resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
+		printResponse(resp, err, "metricJSONSender id: "+fmt.Sprint(id))
+	}
 }
 
 func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage, key string) {
@@ -119,42 +187,6 @@ func SendAllMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage,
 	// }
 }
 
-func SendJSONMetrics(addr *addressurl.AddressURL, storage *memstorage.MemStorage, key string) {
-	counters := storage.GetCounters()
-	gauges := storage.GetGauges()
-
-	client := resty.NewWithClient(&http.Client{
-		Transport: &http.Transport{
-			DisableCompression: true,
-		},
-	})
-	for metric, value := range counters {
-		sendJSONMetric(client, addr, metric, &value, nil, key)
-	}
-	for metric, value := range gauges {
-		sendJSONMetric(client, addr, metric, nil, &value, key)
-	}
-}
-
-func sendJSONMetric(client *resty.Client, addr *addressurl.AddressURL, metric string, counter *int64, gauge *float64, key string) {
-	reqBody := memstorage.Metrics{
-		ID: metric,
-	}
-	if counter == nil {
-		reqBody.MType = "gauge"
-		reqBody.Value = gauge
-	} else {
-		reqBody.MType = "counter"
-		reqBody.Delta = counter
-	}
-
-	metrics := []memstorage.Metrics{reqBody}
-	request := makeJSONGZIPRequest(client, metrics, key)
-
-	resp, err := request.Post(addr.AddrCommand("update", "", "", ""))
-	printResponse(resp, err, "sendJSONMetric")
-}
-
 func makeJSONGZIPRequest(client *resty.Client, reqBody []memstorage.Metrics, key string) *resty.Request {
 	var jsonData []byte
 	var err error
@@ -163,7 +195,7 @@ func makeJSONGZIPRequest(client *resty.Client, reqBody []memstorage.Metrics, key
 	} else {
 		jsonData, err = json.Marshal(reqBody[0])
 	}
-	fmt.Println(string(jsonData))
+	// fmt.Println(string(jsonData))
 	if err != nil {
 		fmt.Println(err)
 		return nil
@@ -270,20 +302,24 @@ func getAllMetrics(addr *addressurl.AddressURL) *resty.Response {
 }
 
 func printResponse(resp *resty.Response, err error, funcName string) {
-	fmt.Println(resp.Request.URL)
+	var respString string
+	respString += "printResponse: " + funcName + "\n"
+	respString += resp.Request.URL + "\n"
 	if err != nil {
-		fmt.Println(funcName + " error: " + fmt.Sprint(err))
+		respString += funcName + " error: " + fmt.Sprint(err) + "\n"
 	} else {
-		fmt.Println(resp.Proto() + " " + resp.Status())
+		respString += resp.Proto() + " " + resp.Status() + "\n"
 		for k, v := range resp.Header() {
-			fmt.Print(k + ": ")
+			respString += k + ": "
 			for _, s := range v {
-				fmt.Print(fmt.Sprint(s))
+				respString += fmt.Sprint(s)
 			}
-			fmt.Print("\n")
+			respString += "\n"
 		}
 	}
-	fmt.Println(string(resp.Body()))
+	respString += string(resp.Body()) + "\n"
+	respString += "printResponse END: " + funcName + "\n"
+	fmt.Println(respString)
 	// if strings.Contains(resp.Header().Get("Content-Encoding"), "gzip") {
 	// 	responseData, err := decompressGzipResponse(resp.Body())
 	// 	if err != nil {
@@ -341,8 +377,8 @@ func main() {
 			case <-ticker.C:
 				fmt.Println("Sending metrics")
 				// testMass(&addr)
-				SendMetrics(&addr, storage)
-				// SendJSONMetrics(&addr, storage, (*config).Key)
+				SendMetrics(&addr, storage, config.Key, config.RateLimit, false)
+				// SendMetrics(&addr, storage, config.Key, config.RateLimit, true)
 				// SendAllMetrics(&addr, storage, (*config).Key)
 				// client := resty.New().R()
 				// resp, err := client.Get(addr.AddrCommand("ping", "", "", ""))

@@ -72,7 +72,7 @@ func updatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	mType := ps.ByName("mType")
 	mName := ps.ByName("mName")
 	mVal := ps.ByName("mVal")
-	body := "Update successful"
+	body := "Update successful: "
 
 	statusRes, err := validateValues(mType, mName)
 	if err != nil {
@@ -283,10 +283,10 @@ func massUpdatePage(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		http.Error(w, "storage.SaveMetrics failed", statusRes)
 		return
 	}
-	fmt.Println("printing response: ")
-	for _, val := range *resp {
-		val.PrintMetric()
-	}
+	// fmt.Println("printing response: ")
+	// for _, val := range *resp {
+	// 	val.PrintMetric()
+	// }
 	statusRes = writeValues(handlerVars, resp)
 	if statusRes != http.StatusOK {
 		http.Error(w, "writeValues failed", statusRes)
