@@ -21,7 +21,7 @@ func getVars() *Config {
 	reportInterval := flag.Int("r", 10, "An interval for sending metrics to server")
 	pollInterval := flag.Int("p", 2, "An interval for collecting metrics")
 	key := flag.String("k", "", "Key for hash func")
-	rateLimit := flag.Int("i", 1, "A limit for concurrent requests")
+	rateLimit := flag.Int("l", 1, "A limit for concurrent requests")
 
 	flag.Parse()
 
