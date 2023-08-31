@@ -48,14 +48,17 @@ func NewProducer(filename string, trunc bool) (*Producer, error) {
 }
 
 func (p *Producer) WriteMemStorage(storage *memstorage.MemStorage) error {
-	for k, v := range storage.Counters {
+	counters := storage.GetCounters()
+	gauges := storage.GetGauges()
+
+	for k, v := range counters {
 		metric := Metric{ID: k, MType: "counter", MVal: fmt.Sprint(v)}
 		err := p.WriteMetric(&metric)
 		if err != nil {
 			return err
 		}
 	}
-	for k, v := range storage.Gauges {
+	for k, v := range gauges {
 		metric := Metric{ID: k, MType: "gauge", MVal: fmt.Sprint(v)}
 		err := p.WriteMetric(&metric)
 		if err != nil {

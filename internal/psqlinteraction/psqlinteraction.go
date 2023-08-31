@@ -70,15 +70,17 @@ func (db *DBConnection) WriteMemStorage(storage *memstorage.MemStorage) RetryFun
 		if err != nil {
 			return nil, err
 		}
+		counters := storage.GetCounters()
+		gauges := storage.GetGauges()
 
-		for k, v := range storage.Counters {
+		for k, v := range counters {
 			_, err := tx.Exec("INSERT INTO counters (name, value) VALUES($1,$2)", k, v)
 			if err != nil {
 				tx.Rollback()
 				return nil, err
 			}
 		}
-		for k, v := range storage.Gauges {
+		for k, v := range gauges {
 			_, err := tx.Exec("INSERT INTO gauges (name, value) VALUES($1,$2)", k, v)
 			if err != nil {
 				tx.Rollback()

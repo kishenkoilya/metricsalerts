@@ -156,21 +156,41 @@ func (m *MemStorage) PutGauge(nameG string, value float64) {
 }
 
 func (m *MemStorage) GetCounter(nameC string) (int64, bool) {
-	m.Mutex.Lock()
+	m.Mutex.RLock()
 	res, ok := m.Counters[nameC]
-	m.Mutex.Unlock()
+	m.Mutex.RUnlock()
 	return res, ok
 }
 
 func (m *MemStorage) GetGauge(nameG string) (float64, bool) {
-	m.Mutex.Lock()
+	m.Mutex.RLock()
 	res, ok := m.Gauges[nameG]
-	m.Mutex.Unlock()
+	m.Mutex.RUnlock()
 	return res, ok
 }
 
+func (m *MemStorage) GetCounters() map[string]int64 {
+	m.Mutex.RLock()
+	result := make(map[string]int64)
+	for k, v := range m.Counters {
+		result[k] = v
+	}
+	m.Mutex.RUnlock()
+	return result
+}
+
+func (m *MemStorage) GetGauges() map[string]float64 {
+	m.Mutex.RLock()
+	result := make(map[string]float64)
+	for k, v := range m.Gauges {
+		result[k] = v
+	}
+	m.Mutex.RUnlock()
+	return result
+}
+
 func (m *MemStorage) PrintAll() string {
-	m.Mutex.Lock()
+	m.Mutex.RLock()
 	fmt.Println("Getting all vals")
 	res := ""
 	if len(m.Counters) > 0 {
@@ -179,12 +199,12 @@ func (m *MemStorage) PrintAll() string {
 	for k, v := range m.Counters {
 		res += k + ": " + fmt.Sprint(v) + "\n"
 	}
-	if len(m.Counters) > 0 {
+	if len(m.Gauges) > 0 {
 		res += "Gauges:\n"
 	}
 	for k, v := range m.Gauges {
 		res += k + ": " + fmt.Sprint(v) + "\n"
 	}
-	m.Mutex.Unlock()
+	m.Mutex.RUnlock()
 	return res
 }
